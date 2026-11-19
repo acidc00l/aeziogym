@@ -3,6 +3,8 @@ import { t } from './i18n.js'
 
 export { EXDB }
 export const EXIDX = {}
+// Búsqueda sin distinguir acentos ni mayúsculas: el PDF dice «FLEXIÓN» y el móvil escribe «flexion»
+export const fold = s => (s || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
 EXDB.forEach(e => { EXIDX[e.id] = e })
 export const BODYPARTS = [...new Set(EXDB.map(e => e.bp))].sort()
 

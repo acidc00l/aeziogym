@@ -3,6 +3,8 @@
 openGym — Copyright (C) 2026 Duarte Santos.
 openGym's own code is licensed under the **GNU AGPL v3.0** (see [LICENSE](LICENSE)).
 
+AezioGym — modifications Copyright (C) 2026 Aezio, released under the same **GNU AGPL v3.0**.
+
 ## App store exception
 
 As an additional permission under section 7 of the AGPL v3.0, the copyright holder permits

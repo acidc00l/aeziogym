@@ -1,6 +1,6 @@
 /* openGym service worker — runtime caching (works with Vite's hashed asset names).
    Media (img/gif) cache-first; everything else network-first with offline fallback. */
-const CACHE = 'opengym-rt-v1'
+const CACHE = 'aezio-gym-v23890-htt'
 
 self.addEventListener('install', () => self.skipWaiting())
 self.addEventListener('activate', e => {
@@ -10,7 +10,7 @@ self.addEventListener('activate', e => {
 })
 self.addEventListener('push', e => {
   const data = e.data ? e.data.json() : {}
-  e.waitUntil(self.registration.showNotification(data.title || 'openGym', {
+  e.waitUntil(self.registration.showNotification(data.title || 'AezioGym', {
     body: data.body || '',
     icon: 'icon-512.png',
     badge: 'icon-180.png',
@@ -32,14 +32,24 @@ self.addEventListener('fetch', e => {
   if (url.pathname.startsWith('/api/')) return    // never cache auth/data
 
   const isMedia = url.pathname.includes('/img/') || url.pathname.includes('/gif/')
+
   if (isMedia) {
     e.respondWith(caches.open(CACHE).then(c => c.match(e.request).then(hit =>
-      hit || fetch(e.request).then(res => { if (res.ok) c.put(e.request, res.clone()); return res })
+      hit || fetch(e.request).then(res => {
+        if (res.ok) {
+          const clone = res.clone(); // Clone inmediato
+          c.put(e.request, clone);
+        }
+        return res;
+      })
     )))
   } else {
     e.respondWith(fetch(e.request).then(res => {
-      if (res.ok) caches.open(CACHE).then(c => c.put(e.request, res.clone()))
-      return res
+      if (res.ok) {
+        const clone = res.clone(); // ✅ Clonamos INMEDIATAMENTE antes de retornar o usar res
+        caches.open(CACHE).then(c => c.put(e.request, clone));
+      }
+      return res;
     }).catch(() => caches.match(e.request).then(hit => hit || caches.match('index.html'))))
   }
 })

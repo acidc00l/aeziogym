@@ -1,0 +1,7 @@
+# Datos de cada instalación: usuarios, passkeys, claves de sesión y de avisos.
+# La API los crea sola la primera vez que arranca. Nunca se suben.
+.env
+data/
+node_modules/
+dist/
+.DS_Store
