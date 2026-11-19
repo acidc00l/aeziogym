@@ -194,6 +194,12 @@ export default function Settings() {
         subtitle={t('to install AezioGym as a full-screen app.') + ' ' + (user ? t('Your data syncs with your profile — sign in anywhere to see it.') : t('Guest data stays on this device — export a backup now and then!'))} />
     </Section>}
 
+    {/* Aviso de la licencia AGPL: quien usa la app por internet tiene que poder llegar al código */}
+    <Section title={t('About')}>
+      <Row icon="info" iconTint="var(--grey)" title={t('AezioGym is based on openGym (AGPL-3.0)')} subtitle={t('Source code')}
+        accessory="chevron" onClick={() => window.open(REPO, '_blank', 'noopener')} />
+    </Section>
+
   </div>
 }
 
