@@ -14,7 +14,7 @@ const PORT = +(process.env.PORT || 3000);
 const DATA = process.env.DATA_DIR || '/data';
 const RP_ID = process.env.RP_ID || 'localhost';
 const ORIGIN = process.env.ORIGIN || 'http://localhost:8080';
-const RP_NAME = process.env.RP_NAME || 'openGym';
+const RP_NAME = process.env.RP_NAME || 'AezioGym';
 // Admin dashboard (issue): admins are matched by uid; INVITE_ONLY gates new signups behind a
 // code the admin generates. Both default off so a fresh self-hosted instance stays open.
 const ADMIN_UIDS = (process.env.ADMIN_UIDS || '').split(',').map(s => s.trim()).filter(Boolean);
@@ -48,6 +48,10 @@ function atomicWrite(file, content) {
   fs.renameSync(tmp, file);
 }
 const stateFile = uid => path.join(DATA, 'state-' + uid.replace(/[^a-zA-Z0-9_-]/g, '') + '.json');
+const pendingFile = uid => path.join(DATA, 'pending-' + uid.replace(/[^a-zA-Z0-9_-]/g, '') + '.json');
+function readPending(uid) {
+  try { const items = JSON.parse(fs.readFileSync(pendingFile(uid), 'utf8')); return Array.isArray(items) ? items : []; } catch { return []; }
+}
 function readState(uid) {
   try { return JSON.parse(fs.readFileSync(stateFile(uid), 'utf8')); } catch { return null; }
 }
@@ -90,7 +94,7 @@ function scheduleRestTimer(userId, sec) {
   if (t) clearTimeout(t);
   restTimers.set(userId, setTimeout(() => {
     restTimers.delete(userId);
-    sendPush(userId, { title: 'Rest over 💪', body: 'Time for your next set.', tag: 'rest-timer' });
+    sendPush(userId, { title: 'Se acabó el descanso 💪', body: 'Es hora de tu siguiente serie', tag: 'rest-timer' });
   }, sec * 1000));
 }
 function cancelRestTimer(userId) {
@@ -238,6 +242,37 @@ function readBody(req) {
 }
 const b64uToBuf = s => Buffer.from(s, 'base64url');
 
+/* ---------- deleting a profile ---------- */
+// Everything the app holds about a profile. Invites keep existing for the admin's records, but
+// no longer say who used them. Refuses admins: the instance must not lose its way in.
+function deleteProfile(uid) {
+  const user = db.users.find(u => u.id === uid);
+  if (!user) return 'missing';
+  if (isAdmin(user)) return 'admin';
+  db.users = db.users.filter(u => u.id !== uid);
+  db.creds = db.creds.filter(c => c.userId !== uid);
+  db.subs = db.subs.filter(s => s.userId !== uid);
+  db.invites.forEach(i => { if (i.usedBy === uid) i.usedBy = 'deleted'; });
+  presence.delete(uid);
+  cancelRestTimer(uid);
+  saveDb();
+  try { fs.unlinkSync(stateFile(uid)); } catch { /* no data saved yet */ }
+  try { fs.unlinkSync(pendingFile(uid)); } catch { /* nothing pending */ }
+  return 'deleted';
+}
+
+// Aezio asks for a deletion when its client erases their account. It reads this same secret from
+// the shared data folder, so nothing new has to be configured. The signature covers the profile
+// and the time, so an intercepted request can't be replayed later or used on someone else.
+const INTERNAL_WINDOW_MS = 60 * 1000;
+function validInternalSignature(action, uid, ts, sig) {
+  if (typeof uid !== 'string' || !uid || typeof sig !== 'string') return false;
+  if (Math.abs(Date.now() - Number(ts)) > INTERNAL_WINDOW_MS) return false;
+  const expected = crypto.createHmac('sha256', SECRET).update(action + ':' + uid + ':' + ts).digest();
+  const given = Buffer.from(sig, 'hex');
+  return given.length === expected.length && crypto.timingSafeEqual(given, expected);
+}
+
 /* ---------- live presence (in-memory) ---------- */
 // Clients heartbeat /api/activity while a workout is on screen; the admin dashboard reads who's
 // live. Purely ephemeral — never persisted. Expires shortly after the last ping.
@@ -372,6 +407,71 @@ const routes = {
     json(res, 200, { ok: true }, { 'Set-Cookie': clearCookie });
   },
 
+  // The signed-in profile deleting itself, from Settings.
+  'POST /api/me/delete': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    const result = deleteProfile(user.id);
+    if (result === 'admin') return json(res, 403, { error: 'admin profiles cannot be deleted here' });
+    json(res, 200, { ok: true }, { 'Set-Cookie': clearCookie });
+  },
+
+  'POST /api/internal/delete-profile': async (req, res) => {
+    const body = await readBody(req);
+    if (!validInternalSignature('delete-profile', body.id, body.ts, body.sig)) return json(res, 403, { error: 'forbidden' });
+    const result = deleteProfile(body.id);
+    if (result === 'admin') return json(res, 403, { error: 'admin profiles cannot be deleted here' });
+    json(res, 200, { ok: true, result });
+  },
+
+  // Aezio returns a profile it had deleted, when its client recovers the account within the month.
+  'POST /api/internal/restore-profile': async (req, res) => {
+    const body = await readBody(req);
+    if (!validInternalSignature('restore-profile', body.id, body.ts, body.sig)) return json(res, 403, { error: 'forbidden' });
+    if (!body.user || body.user.id !== body.id) return json(res, 400, { error: 'bad profile' });
+    if (db.users.some(u => u.id === body.id)) return json(res, 409, { error: 'already exists' });
+    db.users.push(body.user);
+    db.creds.push(...(Array.isArray(body.creds) ? body.creds.filter(c => c.userId === body.id) : []));
+    db.subs.push(...(Array.isArray(body.subs) ? body.subs.filter(s => s.userId === body.id) : []));
+    saveDb();
+    if (body.state && typeof body.state === 'object') atomicWrite(stateFile(body.id), JSON.stringify(body.state));
+    json(res, 200, { ok: true });
+  },
+
+  // Aezio leaves a coach's change here (a whole plan, or a tweak to some exercises). The app picks
+  // it up the next time it opens and applies it itself: writing into the state file from outside
+  // would be overwritten by the next push from the phone.
+  'POST /api/internal/coach-pending': async (req, res) => {
+    const body = await readBody(req);
+    if (!validInternalSignature('coach-pending', body.id, body.ts, body.sig)) return json(res, 403, { error: 'forbidden' });
+    if (!db.users.some(u => u.id === body.id)) return json(res, 404, { error: 'no such profile' });
+    const item = body.item;
+    if (!item || typeof item !== 'object' || !['plan', 'patch'].includes(item.kind)) return json(res, 400, { error: 'bad item' });
+    let items = readPending(body.id);
+    // A newer plan makes any older plan (and the tweaks meant for it) pointless.
+    if (item.kind === 'plan') items = [];
+    items.push({ ...item, key: crypto.randomBytes(8).toString('hex'), at: Date.now() });
+    atomicWrite(pendingFile(body.id), JSON.stringify(items.slice(-20)));
+    json(res, 200, { ok: true, pending: items.length });
+  },
+
+  'GET /api/coach-pending': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    json(res, 200, { items: readPending(user.id) });
+  },
+
+  'POST /api/coach-pending/ack': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    const body = await readBody(req);
+    const keys = Array.isArray(body.keys) ? body.keys.map(String) : [];
+    const left = readPending(user.id).filter(i => !keys.includes(i.key));
+    if (left.length) atomicWrite(pendingFile(user.id), JSON.stringify(left));
+    else { try { fs.unlinkSync(pendingFile(user.id)); } catch { /* nothing pending */ } }
+    json(res, 200, { ok: true, pending: left.length });
+  },
+
   'GET /api/data': async (req, res) => {
     const user = readSession(req);
     if (!user) return json(res, 401, { error: 'not signed in' });
@@ -417,7 +517,7 @@ const routes = {
   'POST /api/push/test': async (req, res) => {
     const user = readSession(req);
     if (!user) return json(res, 401, { error: 'not signed in' });
-    await sendPush(user.id, { title: 'openGym', body: 'Test notification ✅ — this is what alerts look like.', tag: 'test' });
+    await sendPush(user.id, { title: 'AezioGym', body: 'Test notification ✅ — this is what alerts look like.', tag: 'test' });
     json(res, 200, { ok: true });
   },
 

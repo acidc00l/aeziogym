@@ -8,6 +8,13 @@ export const webauthnOK = () => !!(window.PublicKeyCredential && navigator.crede
 export async function api(path, opts) {
   const r = await fetch(path, Object.assign({ headers: { 'Content-Type': 'application/json' } }, opts))
   const data = await r.json().catch(() => ({}))
+  // Aezio: 401 de la puerta (acceso caducado) ≠ 401 de la propia app. No cierra la sesión de la app:
+  // se trata como «sin conexión» (los datos se quedan aquí) y se avisa para volver a entrar.
+  if (r.status === 401 && data.error === 'aezio_gate') {
+    window.dispatchEvent(new Event('aezio-gate'))
+    const e = new Error('aezio_gate'); e.status = 0; e.gate = true; throw e
+  }
+  if (r.ok) window.dispatchEvent(new Event('aezio-gate-ok'))
   if (!r.ok) { const e = new Error(data.error || ('HTTP ' + r.status)); e.status = r.status; throw e }
   return data
 }

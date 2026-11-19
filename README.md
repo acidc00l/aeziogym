@@ -1,3 +1,8 @@
+> **AezioGym** es la versión de [openGym](https://github.com/arvids-unavailable/openGym) que usan los clientes de [Aezio](https://aezio.website).
+> Se publica aquí para cumplir la licencia **AGPL-3.0** del proyecto original: cualquiera que use la app por internet tiene derecho a su código fuente.
+> Cambios principales: traducción al español de la app y de los ejercicios, importación de rutinas desde Aezio, aviso de acceso caducado y huecos de colaboradores.
+> El resto de este documento es el README original.
+
 <div align="center">
 
 <img src="assets/banner.png" alt="openGym" width="720">

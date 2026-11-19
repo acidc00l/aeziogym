@@ -4,6 +4,9 @@ import { localTZ } from '../lib/format.js'
 import { registerCustom } from '../lib/exercises.js'
 import { DEMO, DEMO_SEEDED } from '../lib/demo.js'
 import { MOBILE, nativeLoad, nativeSave, syncReminder } from '../lib/mobile.js'
+import { applyCoachPending } from '../lib/coach-import.js'
+import { t } from '../lib/i18n.js'
+import { useUI } from './useUI.js'
 
 const KEY = 'gym_state_v1'
 export const DEF = {
@@ -57,6 +60,8 @@ export const useStore = create((set, get) => {
   // same applies to the file mirror — backgrounding is often the last thing before the OS
   // kills the app.
   document.addEventListener('visibilitychange', () => {
+    // Al volver a la app (se queda abierta en segundo plano durante días) se mira si el entrenador dejó algo
+    if (document.visibilityState === 'visible') { if (get().ready) get().pullCoachPending(); return }
     if (document.visibilityState !== 'hidden') return
     if (MOBILE && saveTm) {
       clearTimeout(saveTm)
@@ -121,8 +126,32 @@ export const useStore = create((set, get) => {
       } catch (e) { /* offline — keep local */ }
     },
 
+    // Lo que el entrenador dejó en espera desde Aezio (un plan nuevo o un ajuste de pautas). Lo aplica
+    // la propia app, lo sube con el resto del estado y solo entonces lo da por recibido.
+    async pullCoachPending() {
+      if (!get().user) return
+      try {
+        const { items } = await api('/api/coach-pending')
+        if (!items || !items.length) return
+        const next = clone(get().S)
+        const result = applyCoachPending(next, items)
+        persist(next, false)
+        await get().pushState()
+        if (localStorage.getItem('gym_dirty') === '1') return   // no se pudo subir: se reintenta al volver a abrir
+        await api('/api/coach-pending/ack', { method: 'POST', body: JSON.stringify({ keys: items.map(i => i.key) }) })
+        if (result.plans) useUI.getState().toast(t('Your new plan is in the app. Pick a day for each routine.'))
+        else if (result.exercises) useUI.getState().toast(t('Your coach has adjusted some exercises in your routines.'))
+      } catch (e) { /* sin conexión: sigue en espera */ }
+    },
+
     async signOut() {
       try { await get().pushState(); await api('/api/logout', { method: 'POST', body: '{}' }) } catch (e) { /* */ }
+      clearLocalSession()
+    },
+
+    // Deletes the profile and its data on the server. If the request fails, nothing changes here.
+    async deleteProfile() {
+      await api('/api/me/delete', { method: 'POST', body: '{}' })
       clearLocalSession()
     },
 
@@ -176,6 +205,7 @@ export const useStore = create((set, get) => {
         const me = await api('/api/me')
         get().setUser(me.user)
         await get().pullState()
+        await get().pullCoachPending()
         // Re-stamp the reminder's timezone on every load — keeps it correct if you're travelling,
         // without needing to revisit Settings.
         const tz = localTZ()

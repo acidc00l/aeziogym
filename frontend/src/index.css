@@ -18,35 +18,35 @@
 
 /* ---------------------------------------------------------------- tokens -- */
 :root {
-  /* surfaces — dark is the default */
+  /* surfaces — Búnker Aezio */
   --bg:        #000000;
-  --bg-el:     #0e0e10;   /* elevated backdrop (sheets, bars) */
-  --surface:   #1c1c1e;   /* card / grouped-list fill */
-  --surface-2: #2c2c2e;   /* pressed + nested fill */
-  --surface-3: #3a3a3c;   /* controls (segmented track, switch off) */
+  --bg-el:     #0f0f0f;   /* elevated backdrop */
+  --surface:   #181818;   /* card fill */
+  --surface-2: #1f1f1f;   /* pressed / nested fill */
+  --surface-3: #2a2a2a;   /* controls */
 
   /* text */
   --label:     #ffffff;
-  --label-2:   rgba(235,235,245,.60);
-  --label-3:   rgba(235,235,245,.32);
-  --label-4:   rgba(235,235,245,.18);
+  --label-2:   rgba(245,245,245,.65);
+  --label-3:   rgba(245,245,245,.35);
+  --label-4:   rgba(245,245,245,.18);
 
   /* lines */
-  --sep:       rgba(84,84,88,.60);
-  --sep-op:    rgba(84,84,88,.34);   /* for edges sitting over blur */
+  --sep:       rgba(225,6,6,.30);
+  --sep-op:    rgba(225,6,6,.20);
   --hair:      .5px;
 
-  /* system palette (iOS dark values) */
-  --blue:#0a84ff; --green:#30d158; --red:#ff453a; --orange:#ff9f0a;
-  --yellow:#ffd60a; --teal:#40c8e0; --indigo:#5e5ce6; --pink:#ff375f;
-  --purple:#bf5af2; --mint:#63e6e2; --brown:#ac8e68; --grey:#8e8e93;
+  /* system palette (Aezio Accent Integration) */
+  --blue:#0d6efd; --green:#30d158; --red:#e10606; --orange:#ff9f0a;
+  --yellow:#ffd60a; --teal:#0dcaf0; --indigo:#5e5ce6; --pink:#ff375f;
+  --purple:#a55eea; --mint:#63e6e2; --brown:#ac8e68; --grey:#8e8e93;
 
-  /* accent (per-account, synced) */
-  --acc:  var(--green);
-  --acc-2:#248a3d;
-  --on-acc:#000000;
-  --acc-soft: color-mix(in srgb, var(--acc) 16%, transparent);
-  --acc-line: color-mix(in srgb, var(--acc) 38%, transparent);
+  /* ACCENTO PRINCIPAL AEZIO (Rojo Corporativo) */
+  --acc:      #e10606;
+  --acc-2:    #ff1a1a;
+  --on-acc:   #ffffff;
+  --acc-soft: rgba(225, 6, 6, 0.15);
+  --acc-line: rgba(225, 6, 6, 0.35);
 
   /* geometry */
   --r-sm:8px; --r:12px; --r-lg:16px; --r-xl:22px; --r-card:14px;
