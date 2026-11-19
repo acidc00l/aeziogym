@@ -718,4 +718,7 @@ export default {
   "synced {0}": "sincronizado {0}",
   "push enabled": "avisos activados",
   "No users yet.": "Aún no hay usuarios.",
+  "About": "Acerca de",
+  "AezioGym is based on openGym (AGPL-3.0)": "AezioGym está basada en openGym (AGPL-3.0)",
+  "Source code": "Código fuente",
 }
