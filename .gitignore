@@ -5,3 +5,6 @@ data/
 node_modules/
 dist/
 .DS_Store
+
+# Imágenes y animaciones de ejercicios: © Gym visual, no se distribuyen en este repositorio
+media/
