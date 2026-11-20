@@ -2,7 +2,11 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App.jsx'
 import { MOBILE } from './lib/mobile.js'
+import { loadVisibleExercises } from './lib/exercises.js'
 import './index.css'
+
+// Qué ejercicios enseñar (los de «Mis ejercicios» en Aezio); mientras llega, se usa la lista guardada
+loadVisibleExercises()
 
 createRoot(document.getElementById('root')).render(
   <StrictMode><App /></StrictMode>

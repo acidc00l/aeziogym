@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useStore } from '../store/useStore.js'
-import { EXDB, BODYPARTS, allExercises, equipmentOf, fold } from '../lib/exercises.js'
+import { visibleExercises, bodyParts, allExercises, equipmentOf, fold } from '../lib/exercises.js'
 import { bestWeightFor } from '../lib/history.js'
 import { fmtNum } from '../lib/format.js'
 import { t } from '../lib/i18n.js'
@@ -15,6 +15,13 @@ export default function Library() {
   const [bp, setBp] = useState('')
   const [eq, setEq] = useState('')
   const [shown, setShown] = useState(40)
+  // La lista de ejercicios visibles llega de Aezio al abrir la app: al llegar, se vuelve a pintar
+  const [, setRefresh] = useState(0)
+  useEffect(() => {
+    const refresh = () => setRefresh(n => n + 1)
+    window.addEventListener('aezio-exercises', refresh)
+    return () => window.removeEventListener('aezio-exercises', refresh)
+  }, [])
   const ql = fold(q).trim()
   const base = allExercises(S).filter(e => (!bp || e.bp === bp) && (!ql || fold(e.n).includes(ql) || e.tg.includes(ql) || fold(t(e.tg)).includes(ql) || fold(t(e.eq)).includes(ql) || e.eq.includes(ql) || fold(e.desc).includes(ql)))
   const eqOpts = equipmentOf(base)
@@ -23,12 +30,12 @@ export default function Library() {
   const f = eqOn ? base.filter(e => e.eq === eqOn) : base
 
   return <>
-    <div className="hdr"><div><h1>{t('Exercises')}</h1><div className="sub">{t('{0} exercises with animations', EXDB.length)}</div></div></div>
+    <div className="hdr"><div><h1>{t('Exercises')}</h1><div className="sub">{t('{0} exercises with animations', visibleExercises().length)}</div></div></div>
     <div className="search" style={{ marginBottom: 10 }}><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>
       <input className="input" placeholder={t('Search…')} value={q} onChange={e => { setQ(e.target.value); setShown(40) }} /></div>
     <div className="chips" style={{ marginBottom: eqOpts.length > 1 ? 8 : 12 }}>
       <button className={'chip nocap' + (!bp ? ' on' : '')} onClick={() => { setBp(''); setEq(''); setShown(40) }}>{t('All')}</button>
-      {BODYPARTS.map(b => <button key={b} className={'chip' + (bp === b ? ' on' : '')} onClick={() => { setBp(b); setEq(''); setShown(40) }}>{t(b)}</button>)}
+      {bodyParts().map(b => <button key={b} className={'chip' + (bp === b ? ' on' : '')} onClick={() => { setBp(b); setEq(''); setShown(40) }}>{t(b)}</button>)}
     </div>
     {eqOpts.length > 1 && <div className="chips" style={{ marginBottom: 12 }}>
       <button className={'chip nocap' + (!eqOn ? ' on' : '')} onClick={() => { setEq(''); setShown(40) }}>{t('Any equipment')}</button>
