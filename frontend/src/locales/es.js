@@ -5905,4 +5905,6 @@ export default {
   "Advertisement": "Publicidad",
   "To get started, open your plan on aezio.website and tap «Add to my app». You can also build your own routine.": "Para empezar, abre tu plan en aezio.website y pulsa «Añadir a mi app». También puedes crear tu propia rutina.",
   "Add your plan from aezio.website with «Add to my app», or create a routine.": "Añade tu plan desde aezio.website con «Añadir a mi app», o crea una rutina.",
+  "No programmes yet. Make one from your plan.": "Aún no hay programas. Crea uno desde tu plan.",
+  "Your routines as a block of weeks.": "Tus rutinas como un bloque de semanas.",
 }

@@ -171,7 +171,7 @@ export default function Plan() {
         { icon: 'qr', label: t('Scan a QR code'), sub: t('A routine from a friend’s phone, the website or the poster by the squat rack.'), onClick: () => import('../components/ScanCode.jsx').then(m => m.scanQrCode()) },
         ...(aezioBuild() ? [] : [{ icon: 'clipboard', label: t('Load starter plan'), onClick: starterPlanSheet }]),
         { icon: 'history', label: t('Routine from a past workout'), disabled: !routineSources(S.workouts, 1).length, onClick: () => routineFromWorkoutSheet(id => nav('/plan/r/' + id)) },
-        { icon: 'calendar', label: t('Programmes'), sub: t('Your routines as a block of weeks, with starter programmes to try.'), onClick: () => nav('/plan/programmes') },
+        { icon: 'calendar', label: t('Programmes'), sub: aezioBuild() ? t('Your routines as a block of weeks.') : t('Your routines as a block of weeks, with starter programmes to try.'), onClick: () => nav('/plan/programmes') },
       ],
     })
   }

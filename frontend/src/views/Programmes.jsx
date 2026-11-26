@@ -14,6 +14,7 @@ import { effortOf, modeOf, isBw } from '../lib/history.js'
 import { exOr } from '../lib/exercises.js'
 import { weightIncrement } from '../lib/progression.js'
 import { REST } from '../lib/rotation.js'
+import { aezioBuild } from '../lib/build-caps.js'
 import { starterProgrammeOptions, buildStarterProgramme } from '../lib/starter.js'
 import { exView, viewTarget, exUnitOf } from '../lib/ex-unit.js'
 import {
@@ -137,18 +138,18 @@ export default function Programmes() {
       {list.length ? list.map(p => <Row key={p.id} icon="calendar" title={p.name || t('Programme')} accessory="chevron"
         subtitle={tn('{0} week', '{0} weeks', p.weeks.length) + (p.id === runningId ? ' · ' + t('running') : '')}
         onClick={() => nav('/plan/prog/' + p.id)} />)
-        : <EmptyState className="in-sect" text={t('No programmes yet. Make one from your plan, or grab a starter below.')}>
+        : <EmptyState className="in-sect" text={aezioBuild() ? t('No programmes yet. Make one from your plan.') : t('No programmes yet. Make one from your plan, or grab a starter below.')}>
           <Button variant="tinted" icon="plus" onClick={create}>{t('New programme')}</Button>
         </EmptyState>}
     </Section>
     {list.length > 0 && <Button variant="tinted" icon="plus" onClick={create}>{t('New programme')}</Button>}
-    <Section title={t('Starter programmes')} footer={t('Each adds its own routines, so your plan stays as it is until you start it.')}>
+    {!aezioBuild() && <Section title={t('Starter programmes')} footer={t('Each adds its own routines, so your plan stays as it is until you start it.')}>
       {starterProgrammeOptions().map(o => {
         const c = STARTER_COPY[o.id]()
         return <Row key={o.id} icon="clipboard" title={c.name} accessory="chevron"
           subtitle={c.about + ' ' + tn('{0} day a week', '{0} days a week', o.days)} onClick={() => addStarter(o.id)} />
       })}
-    </Section>
+    </Section>}
   </div>
 }
 
