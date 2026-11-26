@@ -8,7 +8,7 @@
 import { t } from '../lib/i18n.js'
 import { ACCENT_NAMES } from '../lib/format.js'
 import { MODULES } from '../lib/modules.js'
-import { OFFLINE_OFF_MODULES } from '../lib/build-caps.js'
+import { OFFLINE_OFF_MODULES, aezioBuild } from '../lib/build-caps.js'
 import { available, shownThemes } from '../lib/seasonal.js'
 
 // `mod`: the module (lib/modules.js) a page belongs to; with it off the page and its rows are gone,
@@ -434,13 +434,13 @@ export function searchSettings(query, ctx, tr = t) {
     if (PAGES[e.page].mod && !pageVisible(e.page, ctx)) continue
     if (e.when && !e.when(ctx)) continue
     // A row that needs the network is not there in openGym Offline (lib/build-caps.js).
-    if (e.net && ctx.offline) continue
+    if (e.net && (ctx.offline || aezioBuild())) continue
     if (e.mod && ctx.mod && !ctx.mod(e.mod)) continue
     consider(e, false)
   }
   // The root's "Use your subscription" row (Connections) opens a screen of its own (views/Assistants.jsx), not a
   // settings page; it is found like one. Not in openGym Offline or the demo, as on the root.
-  if (!ctx.offline && !ctx.demo) {
+  if (!ctx.offline && !ctx.demo && !aezioBuild()) {
     consider({ page: 'look', route: '/assistants', title: 'Use your subscription', icon: 'chat', tint: 'var(--acc)',
       kw: 'claude chatgpt gemini mcp connector assistant ai plan subscription' }, true)   // a root row: its trail is Settings
   }

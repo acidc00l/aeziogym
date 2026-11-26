@@ -62,8 +62,8 @@ export const GROUPS = [
 const TRAINING = ['effort', 'plates', 'watch']
 export const PRESETS = [
   { id: 'training', title: 'Just training', desc: 'Log, plan, progress. Nothing else on the screen.', on: TRAINING },
-  { id: 'body', title: 'Training and body', desc: 'Plus weigh-ins, measurements, photos and your health apps.', on: [...TRAINING, 'strength', 'body', 'health'] },
-  { id: 'all', title: 'Everything', desc: 'Streaks, the Coach, themes, the lot.', on: MODULE_IDS },
+  { id: 'body', title: 'Training and body', desc: 'Plus weigh-ins, measurements and photos.', on: [...TRAINING, 'strength', 'body', 'health'] },
+  { id: 'all', title: 'Everything', desc: 'Streaks, challenges, themes, the lot.', on: MODULE_IDS },
 ]
 export const PRESET = Object.fromEntries(PRESETS.map(p => [p.id, p]))
 

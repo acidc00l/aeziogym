@@ -1,7 +1,7 @@
 // openGym Offline (lib/build-caps.js): the build without the INTERNET permission hides everything
 // that needs a network, and the modules that are nothing but network are off whatever S says.
 import { afterEach, describe, expect, it } from 'vitest'
-import { setOfflineBuild, offlineBuild, networkBuilt, subscribeBuildCaps, OFFLINE_OFF_CARDS } from './build-caps.js'
+import { setOfflineBuild, setAezioBuild, aezioBuild, offlineBuild, networkBuilt, subscribeBuildCaps, OFFLINE_OFF_CARDS, AEZIO_OFF_MODULES, AEZIO_OFF_CARDS } from './build-caps.js'
 import { isOn, moduleBuilt, presetOf, applyPreset } from './modules.js'
 import { youtubeId, youtubeSearchUrl, youtubeLinks } from './youtube.js'
 import { directory } from './integrations.js'
@@ -56,5 +56,40 @@ describe('openGym Offline', () => {
     expect(ids).toEqual(expect.arrayContaining(['files', 'csv']))
     const normal = directory({ ...ctx, offline: false }).flatMap(c => c.cards.map(x => x.id))
     expect(normal.length).toBeGreaterThan(ids.length)
+  })
+})
+
+describe('AezioGym', () => {
+  afterEach(() => setAezioBuild(false))
+
+  it('oculta Coach, relojes, salud, comunidad e integraciones sin tocar la elección guardada', () => {
+    const S = { modules: { coach: true, watch: true, health: true } }
+    expect(aezioBuild()).toBe(false)
+    expect(isOn(S, 'coach')).toBe(true)
+    setAezioBuild(true)
+    for (const id of AEZIO_OFF_MODULES) { expect(isOn(S, id)).toBe(false); expect(moduleBuilt(id)).toBe(false) }
+    for (const id of ['body', 'motivation', 'effort', 'plates', 'strength', 'seasonal']) expect(isOn(S, id)).toBe(true)
+    expect(S.modules.coach).toBe(true)
+    const all = {}; applyPreset(all, 'all')
+    expect(presetOf(all)).toBe('all')
+    setAezioBuild(false)
+    expect(isOn(S, 'coach')).toBe(true)
+  })
+
+  it('suma sus módulos a los de la compilación sin red', () => {
+    setOfflineBuild(true); setAezioBuild(true)
+    expect(isOn({}, 'coach')).toBe(false)
+    setAezioBuild(false)
+    expect(isOn({}, 'coach')).toBe(false)
+    expect(isOn({}, 'watch')).toBe(true)
+  })
+
+  it('no ofrece Coach, búsqueda de gimnasios ni tarjetas externas', async () => {
+    setAezioBuild(true)
+    expect(coachAvailable({ coach: { enabled: true } }, { id: 'u' }, {})).toBe(false)
+    expect(await findPlaces('gym zurich', { suggest: () => { throw new Error('asked the network') } })).toEqual([])
+    expect(await addressAt({ lat: 47, lng: 8 })).toBe(null)
+    const ids = directory({ mobile: false, mod: () => true }).flatMap(c => c.cards.map(x => x.id))
+    for (const id of AEZIO_OFF_CARDS) expect(ids).not.toContain(id)
   })
 })

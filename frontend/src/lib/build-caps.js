@@ -19,8 +19,26 @@ export const OFFLINE_OFF_MODULES = ['coach', 'integrations', 'community']
 // opennutrition: the sister-app link (lib/sister-nutrition.js, gm-hooks) talks to another server.
 export const OFFLINE_OFF_CARDS = ['hevy', 'strava', 'webdav', 'calendar', 'webhook', 'coach', 'mcp', 'opennutrition']
 
+// AezioGym: lo que openGym ofrece y nosotros no (la app es solo web/PWA y sin servicios externos).
+// Se activa al arrancar (main.jsx, setAezioBuild) salvo con VITE_OPENGYM_FULL=1 en la compilación,
+// que devuelve la oferta completa de openGym. No borra nada: solo deja de ofrecerlo, y la
+// elección del perfil se conserva.
+//   módulos: Coach de IA, relojes, Apple Health / Health Connect, Comunidad, Integraciones
+//   tarjetas: Hevy, Strava, WebDAV, calendario, webhooks, MCP, openNutrition, salud
+export const AEZIO_OFF_MODULES = ['coach', 'watch', 'health', 'community', 'integrations']
+export const AEZIO_OFF_CARDS = ['hevy', 'strava', 'webdav', 'calendar', 'webhook', 'coach', 'mcp', 'opennutrition', 'apple-health', 'health-connect']
+
 let offline = false
+let aezio = false
 const subs = new Set()
+
+/** Si esta compilación es AezioGym (sin las funciones externas de openGym). */
+export const aezioBuild = () => aezio
+
+const refreshModules = () => setUnavailableModules([
+  ...(offline ? OFFLINE_OFF_MODULES : []),
+  ...(aezio ? AEZIO_OFF_MODULES : []),
+])
 
 /** Whether this is openGym Offline, the build without the INTERNET permission. */
 export const offlineBuild = () => offline
@@ -32,7 +50,15 @@ export function setOfflineBuild(v) {
   v = !!v
   if (v === offline) return
   offline = v
-  setUnavailableModules(v ? OFFLINE_OFF_MODULES : [])
+  refreshModules()
+  subs.forEach(fn => { try { fn() } catch { /* a listener's own trouble */ } })
+}
+
+export function setAezioBuild(v) {
+  v = !!v
+  if (v === aezio) return
+  aezio = v
+  refreshModules()
   subs.forEach(fn => { try { fn() } catch { /* a listener's own trouble */ } })
 }
 

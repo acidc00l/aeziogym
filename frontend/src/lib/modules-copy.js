@@ -28,6 +28,6 @@ export const groupCopy = () => ({
 
 export const presetCopy = () => ({
   training: [t('Just training'), t('Log, plan, progress. Nothing else on the screen.')],
-  body: [t('Training and body'), t('Plus weigh-ins, measurements, photos and your health apps.')],
-  all: [t('Everything'), t('Streaks, the Coach, themes, the lot.')],
+  body: [t('Training and body'), t('Plus weigh-ins, measurements and photos.')],
+  all: [t('Everything'), t('Streaks, challenges, themes, the lot.')],
 })

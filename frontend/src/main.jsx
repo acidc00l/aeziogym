@@ -14,6 +14,7 @@ import './index.css'
 import { hideBoot, handOverFromLaunchScreen } from './lib/boot.js'
 import { guardFocusZoom } from './lib/viewport-zoom.js'
 import { initBuildCaps } from './lib/channel.js'
+import { setAezioBuild } from './lib/build-caps.js'
 import { startNetLog } from './lib/net-log.js'
 import { applyDisplay } from './lib/display-prefs.js'
 
@@ -32,6 +33,10 @@ applyDisplay()
 
 // Settings → About → Network log (lib/net-log.js): from the very first request on.
 if (MOBILE) startNetLog()
+
+// AezioGym: sin Coach de IA, relojes, salud, comunidad ni integraciones externas (lib/build-caps.js).
+// VITE_OPENGYM_FULL=1 en la compilación devuelve la oferta completa de openGym.
+setAezioBuild(import.meta.env.VITE_OPENGYM_FULL !== '1')
 
 const render = () => createRoot(document.getElementById('root')).render(
   <StrictMode><App /></StrictMode>
