@@ -5954,4 +5954,7 @@ export default {
   "shorter": "أقصر قليلًا",
   "AezioGym is based on openGym (AGPL-3.0)": "AezioGym is based on openGym (AGPL-3.0)",
   "Media licensed to Aezio by Gym visual for use in AezioGym; see": "Media licensed to Aezio by Gym visual for use in AezioGym; see",
+  "Your access has expired": "Your access has expired",
+  "Your workouts are safe on this device and will upload as soon as you sign in again.": "Your workouts are safe on this device and will upload as soon as you sign in again.",
+  "Sign in again": "Sign in again",
 }

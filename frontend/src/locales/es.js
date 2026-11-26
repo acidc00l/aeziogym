@@ -5899,4 +5899,7 @@ export default {
   "shorter": "un poco más corto",
   "AezioGym is based on openGym (AGPL-3.0)": "AezioGym está basada en openGym (AGPL-3.0)",
   "Media licensed to Aezio by Gym visual for use in AezioGym; see": "Medios con licencia de Gym visual a Aezio para su uso en AezioGym; ver",
+  "Your access has expired": "Tu acceso ha caducado",
+  "Your workouts are safe on this device and will upload as soon as you sign in again.": "Tus entrenos están a salvo en este dispositivo y se subirán en cuanto vuelvas a entrar.",
+  "Sign in again": "Volver a entrar",
 }

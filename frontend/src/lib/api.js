@@ -121,6 +121,14 @@ async function exchange(url, init) {
   let parsed = true
   try { data = await r.json() } catch { parsed = false }
   const body = parsed && data && typeof data === 'object' ? data : null
+  // AezioGym: el 401 de la puerta de acceso (acceso caducado) no es el de la propia app. No cierra la
+  // sesión: se trata como «sin conexión» (sin status, los datos se quedan aquí y se reintenta) y se
+  // avisa con GateBanner para volver a entrar. Cualquier respuesta buena quita el aviso.
+  if (r.status === 401 && body && body.error === 'aezio_gate') {
+    window.dispatchEvent(new Event('aezio-gate'))
+    throw Object.assign(failure(t('Your access has expired'), 'aezio-gate'), { gate: true })
+  }
+  if (r.ok) window.dispatchEvent(new Event('aezio-gate-ok'))
   // The body rides along on the error: a 409 from /api/data carries the server's document.
   if (!r.ok) { const e = new Error(refusal(r.status, body)); e.status = r.status; e.data = body || {}; throw e }
   if (!body) throw failure(t('The server answered with something other than openGym data.'), 'bad-response', r.status)
