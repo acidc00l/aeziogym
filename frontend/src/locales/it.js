@@ -5907,4 +5907,6 @@ export default {
   "Preview on": "Anteprima su",
   // 1.4.5 UX round, P2: timed holds in the finish summary (next hold is shorter)
   "shorter": "un po’ più corto",
+  "AezioGym is based on openGym (AGPL-3.0)": "AezioGym is based on openGym (AGPL-3.0)",
+  "Media licensed to Aezio by Gym visual for use in AezioGym; see": "Media licensed to Aezio by Gym visual for use in AezioGym; see",
 }

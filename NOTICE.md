@@ -49,22 +49,26 @@ SOFTWARE.
 
 ## Exercise media (stills and animations)
 
-The exercise stills and animations in `catalogue/media/` (and inside the published container
-images and app packages) are licensed to openGym by Gym visual. **They are not covered by
-openGym's AGPL** and not by any licence of the exercise text below.
+This repository carries **no exercise media**: `catalogue/media/` is ignored by git, apart from its
+`NOTICE.md`. The media that openGym 1.4.5 shipped there are licensed by Gym visual to openGym only
+and are not part of AezioGym.
+
+The stills and animations that AezioGym's own deployment shows are by Gym visual and are licensed
+to Aezio under Aezio's own agreement with Gym visual (206 exercises plus 25 additional ones, for
+web, app and printable PDF use). **They are not covered by the AGPL**, they are not distributed in
+this repository, and the licence is Aezio's: it does not pass to forks.
 
 > © Aliaksandr Makatserchyk, Gym visual, gymvisual.com (reuse is governed by Gym visual's Terms & Conditions; obtain your own license there before reusing the media). NOTICE TO DEVELOPERS: The exercise animations included in this project are provided strictly for use within the openGym application. Third parties have no rights to reuse, extract, or integrate these media assets into independent apps, websites, or commercial products. To use these animations for your own software, you must obtain a license directly from gymvisual.com.
 
+(The paragraph above is Gym visual's attribution for the media of upstream openGym, reproduced as
+the licence asks. For AezioGym's media, the licence is Aezio's own.)
+
 What that means in practice:
 
-- The repository, websites and self-hosted servers carry the media at 180×180 px at most. Larger
-  versions exist only inside the compiled openGym app packages.
-- There is no public API, CDN or downloadable media pack. Don't hotlink the files or copy them out
-  of this repository or a running instance.
-- A non-commercial fork of openGym may keep the unmodified 180 px media together with this notice.
-  A commercial fork, or any other use, needs its own licence from [gymvisual.com](https://gymvisual.com/).
-- The media may not be used to train, prompt or feed any AI system, or as a basis for generated
-  images, animations or video.
+- Don't copy the media out of a running AezioGym instance, hotlink them or feed them to any AI system.
+- A fork of AezioGym needs its own licence from [gymvisual.com](https://gymvisual.com/) for any
+  exercise media. To show media in a self-hosted copy, mount your own licensed files at
+  `/exercise-media/` (see `docs/AEZIOGYM.md`).
 
 ## Exercise text (names, muscles, descriptions, instructions)
 
