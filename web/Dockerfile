@@ -24,6 +24,10 @@ COPY frontend/ ./
 # image built between two releases calls itself the same thing, and "which build are you running?"
 # cannot be answered from the phone. Unset, the app reports package.json's version as before.
 ARG APP_BUILD=""
+# Formato de los clips de ejercicio (lib/exercises.js): vacío = .mp4, como upstream; «webp» = WebP
+# animado (los de 360 px de AezioGym). docker compose: build.args o docker-compose.aezio.yml.
+ARG VITE_CLIP_EXT=""
+ENV VITE_CLIP_EXT=$VITE_CLIP_EXT
 RUN APP_BUILD="$APP_BUILD" npm run build
 
 FROM nginxinc/nginx-unprivileged:1-alpine
@@ -58,12 +62,12 @@ ARG VERSION=dev
 ARG VCS_REF=dev
 ARG BUILD_DATE=unknown
 
-LABEL maintainer="Duarte Santos https://github.com/DuarteSantos8" \
+LABEL maintainer="Aezio https://github.com/acidc00l/aeziogym" \
     org.opencontainers.image.title="opengym-web" \
     org.opencontainers.image.description="Frontend for Self-hosted gym & body-weight tracker — plan routines, log workouts (supersets & cardio too), track your weight and progress, passkey login. Your data, your server." \
-    org.opencontainers.image.source="https://github.com/DuarteSantos8/openGym" \
-    org.opencontainers.image.url="https://opengym.ch" \
-    org.opencontainers.image.documentation="https://github.com/DuarteSantos8/openGym#readme" \
+    org.opencontainers.image.source="https://github.com/acidc00l/aeziogym" \
+    org.opencontainers.image.url="https://aezio.website" \
+    org.opencontainers.image.documentation="https://github.com/acidc00l/aeziogym#readme" \
     org.opencontainers.image.licenses="AGPL-3.0-or-later" \
     org.opencontainers.image.version=$VERSION \
     org.opencontainers.image.revision=$VCS_REF \
@@ -81,9 +85,10 @@ COPY --chmod=755 web/05-check-base-path.sh /docker-entrypoint.d/
 RUN sed -i 's/\r$//' /docker-entrypoint.d/05-check-base-path.sh
 USER 101
 COPY --from=build /app/frontend/dist /usr/share/nginx/html
-# The exercise stills and animations, 180 px, licensed from Gym visual for openGym only: see
-# catalogue/media/NOTICE.md. They ship inside the image; nothing is downloaded at start-up.
-COPY catalogue/media/ /usr/share/nginx/html/exercise-media/
+# AezioGym: la imagen NO lleva medios de ejercicios (su licencia es de Aezio y no va en el repositorio
+# ni en la imagen). Se montan desde fuera como volumen de solo lectura en /exercise-media/:
+#   -v /ruta/a/medios:/usr/share/nginx/html/exercise-media:ro   (docker-compose.aezio.yml: MEDIA_DIR)
+# Sin ese volumen las fichas se ven sin animación. Ver NOTICE.md y docs/AEZIOGYM.md.
 
 # Set Default ENVs for nginx
 ENV NGINX_PORT=80
