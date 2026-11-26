@@ -36,7 +36,8 @@ const heads = () => [...host.querySelectorAll('.card-head-title')].map(el => el.
 
 describe('Home follows the modules', () => {
   it('Everything: the weight card, the check-in and the streak are there', () => {
-    mountWith(undefined)
+    // AezioGym trae el check-in apagado de serie: «Todo» lo enciende con el interruptor antiguo.
+    mountWith(undefined, { checkIn: true })
     expect(heads()).toContain('Body weight')
     expect(heads()).toContain('Check in')
     expect(heads().some(h => /week streak/.test(h))).toBe(true)
@@ -52,7 +53,7 @@ describe('Home follows the modules', () => {
   })
 
   it('one module at a time, and back on brings it back', () => {
-    mountWith({ body: false })
+    mountWith({ body: false }, { checkIn: true })
     expect(heads()).not.toContain('Body weight')
     expect(heads()).toContain('Check in')
     mountWith({ body: true, checkin: false })

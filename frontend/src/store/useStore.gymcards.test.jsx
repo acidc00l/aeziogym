@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('../lib/api.js', () => ({ api: vi.fn(), setRemoteAuth: vi.fn() }))
 
 import { DEF, useStore } from './useStore.js'
+import { isOn } from '../lib/modules.js'
 
 const clone = value => JSON.parse(JSON.stringify(value))
 
@@ -144,11 +145,17 @@ describe('editing a card in place', () => {
   })
 })
 
-// The Settings switch. On by default; an older profile that predates the key must read as on
-// too, and off only hides the feature — the cards themselves survive the round trip.
+// The Settings switch. AezioGym: off by default (a fresh profile starts without it); turning it
+// off only hides the feature — the cards themselves survive the round trip.
 describe('checkIn switch', () => {
-  it('is on for a fresh profile', () => {
-    expect(useStore.getState().S.checkIn).toBe(true)
+  it('is off for a fresh profile, and the Modules reading agrees', () => {
+    expect(useStore.getState().S.checkIn).toBe(false)
+    expect(isOn(useStore.getState().S, 'checkin')).toBe(false)
+  })
+
+  it('a saved profile that had it on keeps it on', () => {
+    useStore.getState().update(s => { s.checkIn = true }, false)
+    expect(isOn(useStore.getState().S, 'checkin')).toBe(true)
   })
 
   it('turning it off keeps the saved cards', () => {
