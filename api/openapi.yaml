@@ -218,7 +218,7 @@ tags:
   - name: aezio
     description: >-
       AezioGym: what Aezio's web and the app exchange (docs/AEZIOGYM.md, «Contrato Aezio ↔ AezioGym»).
-      The three `/api/internal/*` routes are called by Aezio's web over the internal docker
+      The `/api/internal/*` routes are called by Aezio's web over the internal docker
       address, never by a browser; they carry no session, and the signature in the body is the credential.
 
 security:
@@ -994,6 +994,83 @@ paths:
               schema: { $ref: '#/components/schemas/Error' }
         '403':
           description: '`forbidden`: signature wrong, outside the minute, or no profile id.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/internal/workout-media:
+    post:
+      tags: [aezio]
+      operationId: internalWorkoutMedia
+      summary: Aezio reads one photo or video of a logged workout
+      security: []
+      description: |
+        Called by Aezio's web. The signature covers `workout-media:<id>:<ts>`. The `hash` is only served
+        when the profile's own state lists it in `workouts[].media`, in a set's `media` (form video) or as
+        the poster of one; any other hash is as missing as an unknown one. Streamed with `Range` support;
+        `X-Media-At` carries the file's `at` in milliseconds. Not served: custom-exercise media, sounds, avatar.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/AezioSigned'
+                - type: object
+                  required: [hash]
+                  properties:
+                    hash: { type: string, description: 'sha256 in hex, 64 characters.' }
+      responses:
+        '200':
+          description: The file, with its stored `Content-Type`, `Accept-Ranges` and `X-Media-At`.
+        '206':
+          description: A byte range of the file (`Content-Range`).
+        '400':
+          description: '`bad hash`.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '403':
+          description: '`forbidden`: signature wrong, outside the minute, or no profile id.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: '`no such profile`, or `media-missing` (not listed by the profile, or the file is gone).'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '416':
+          description: The range does not fit the file.
+
+  /api/internal/workout-media-list:
+    post:
+      tags: [aezio]
+      operationId: internalWorkoutMediaList
+      summary: Aezio lists the photos and videos of a profile's workouts
+      security: []
+      description: |
+        Called by Aezio's web. The signature covers `workout-media-list:<id>:<ts>`. Each item has
+        `source` (`workout`, or `set` for a set's form video, then with `exId`) and `expiresAt` (`at` plus
+        the retention in ms, `null` without retention). `retentionDays` is `MEDIA_RETENTION_DAYS`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AezioSigned' }
+      responses:
+        '200':
+          description: '`{ ok, items, usedBytes, quotaBytes, retentionDays }`.'
+          content:
+            application/json:
+              schema: { type: object }
+        '403':
+          description: '`forbidden`: signature wrong, outside the minute, or no profile id.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: '`no such profile`.'
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }

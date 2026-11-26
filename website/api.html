@@ -332,7 +332,7 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
   <p class="api-facts">
     <span>OpenAPI 3.1.0</span>
     <span>openGym v1.4.5</span>
-    <span>182 endpoints</span>
+    <span>184 endpoints</span>
     <span>AGPL-3.0-or-later</span>
   </p>
 
@@ -6250,7 +6250,7 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
 
 <section class="api-sec" id="aezio">
   <h2>Aezio</h2>
-  <p class="sub">AezioGym: what Aezio's web and the app exchange (docs/AEZIOGYM.md, «Contrato Aezio ↔ AezioGym»). The three <code>/api/internal/*</code> routes are called by Aezio's web over the internal docker address, never by a browser; they carry no session, and the signature in the body is the credential.</p>
+  <p class="sub">AezioGym: what Aezio's web and the app exchange (docs/AEZIOGYM.md, «Contrato Aezio ↔ AezioGym»). The <code>/api/internal/*</code> routes are called by Aezio's web over the internal docker address, never by a browser; they carry no session, and the signature in the body is the credential.</p>
   <div class="eps">
 
 <details class="ep" id="op-internalDeleteProfile">
@@ -6334,6 +6334,78 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
   <div class="prow rrow">
     <span class="r-code s4">400</span>
     <span class="p-desc"><code>bad item</code>.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">403</span>
+    <span class="p-desc"><code>forbidden</code>: signature wrong, outside the minute, or no profile id.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">404</span>
+    <span class="p-desc"><code>no such profile</code>.</span>
+  </div>
+    </div>
+  </div>
+</details>
+
+<details class="ep" id="op-internalWorkoutMedia">
+  <summary>
+    <span class="m post">POST</span>
+    <span class="ep-path"><code>/api/internal/workout-media</code><span class="ep-chip public">public</span></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">Aezio reads one photo or video of a logged workout</span>
+  </summary>
+  <div class="ep-body">
+<p>Called by Aezio's web. The signature covers <code>workout-media:&lt;id&gt;:&lt;ts&gt;</code>. The <code>hash</code> is only served when the profile's own state lists it in <code>workouts[].media</code>, in a set's <code>media</code> (form video) or as the poster of one; any other hash is as missing as an unknown one. Streamed with <code>Range</code> support; <code>X-Media-At</code> carries the file's <code>at</code> in milliseconds. Not served: custom-exercise media, sounds, avatar.</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Public: no authentication required.</span></p>
+
+<p class="ep-h">Request body <span class="p-hint">(JSON)</span></p>
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">200</span>
+    <span class="p-desc">The file, with its stored <code>Content-Type</code>, <code>Accept-Ranges</code> and <code>X-Media-At</code>.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s2">206</span>
+    <span class="p-desc">A byte range of the file (<code>Content-Range</code>).</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">400</span>
+    <span class="p-desc"><code>bad hash</code>.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">403</span>
+    <span class="p-desc"><code>forbidden</code>: signature wrong, outside the minute, or no profile id.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">404</span>
+    <span class="p-desc"><code>no such profile</code>, or <code>media-missing</code> (not listed by the profile, or the file is gone).</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">416</span>
+    <span class="p-desc">The range does not fit the file.</span>
+  </div>
+    </div>
+  </div>
+</details>
+
+<details class="ep" id="op-internalWorkoutMediaList">
+  <summary>
+    <span class="m post">POST</span>
+    <span class="ep-path"><code>/api/internal/workout-media-list</code><span class="ep-chip public">public</span></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">Aezio lists the photos and videos of a profile's workouts</span>
+  </summary>
+  <div class="ep-body">
+<p>Called by Aezio's web. The signature covers <code>workout-media-list:&lt;id&gt;:&lt;ts&gt;</code>. Each item has <code>source</code> (<code>workout</code>, or <code>set</code> for a set's form video, then with <code>exId</code>) and <code>expiresAt</code> (<code>at</code> plus the retention in ms, <code>null</code> without retention). <code>retentionDays</code> is <code>MEDIA_RETENTION_DAYS</code>.</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Public: no authentication required.</span></p>
+
+<p class="ep-h">Request body</p><p class="p-desc"><a href="#schema-AezioSigned">AezioSigned</a></p>
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">200</span>
+    <span class="p-desc"><code>{ ok, items, usedBytes, quotaBytes, retentionDays }</code>.<span class="r-sig">object</span></span>
   </div>
   <div class="prow rrow">
     <span class="r-code s4">403</span>
