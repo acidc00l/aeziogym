@@ -52,7 +52,7 @@ const preflight = (origin, extra = {}) => ({
 });
 
 for (const origin of ['https://localhost', 'capacitor://localhost']) {
-  test(`the pairing preflight from ${origin} is answered by openGym with that origin allowed`, async t => {
+  test(`the pairing preflight from ${origin} is answered by AezioGym with that origin allowed`, async t => {
     const port = await startServer(t);
     const r = await send(port, 'OPTIONS', '/api/pair/redeem', preflight(origin));
     assert.equal(r.status, 204);

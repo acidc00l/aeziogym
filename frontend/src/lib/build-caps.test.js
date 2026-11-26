@@ -10,7 +10,7 @@ import { findPlaces, addressAt } from './gym-places.js'
 
 afterEach(() => setOfflineBuild(false))
 
-describe('openGym Offline', () => {
+describe('AezioGym Offline', () => {
   it('is off by default and says so to listeners once', () => {
     expect(offlineBuild()).toBe(false)
     expect(networkBuilt()).toBe(true)

@@ -28,7 +28,7 @@ export function useNutritionLink(range = null) {
 const ERRORS = {
   url: 'That does not look like an address.',
   code: 'That code did not work. Codes expire after a few minutes, so grab a fresh one.',
-  unreachable: 'openGym could not reach openNutrition there. Check the address, or that this device can see it.',
+  unreachable: 'AezioGym could not reach openNutrition there. Check the address, or that this device can see it.',
   revoked: 'openNutrition said no. The link was revoked there, so link again.',
   missing: 'That openNutrition does not know this kind of link yet. Create a token there and paste it instead.',
   notnutrition: 'Something answered, but it was not openNutrition.',
@@ -61,7 +61,7 @@ function LinkSetup({ close }) {
   }
   return <>
     <Head status="off" />
-    <p className="intg-lead">{t('What you ate next to what you lifted: calories, protein and protein meals in your report and month story, and your fasting window on Home. openGym only reads, it never changes a thing there.')}</p>
+    <p className="intg-lead">{t('What you ate next to what you lifted: calories, protein and protein meals in your report and month story, and your fasting window on Home. AezioGym only reads, it never changes a thing there.')}</p>
     <label className="intg-label" htmlFor="on-url">{t('openNutrition address')}</label>
     <TextField id="on-url" type="url" inputMode="url" autoCapitalize="off" autoCorrect="off" spellCheck={false}
       placeholder="https://nutrition.example.com" value={url} onChange={e => setUrl(e.target.value)} />

@@ -230,7 +230,7 @@ export function startAuthorize(db, q, pending, now = Date.now(), opts = {}) {
   if (q.get('response_type') !== 'code') return back('unsupported_response_type', 'response_type must be code');
   const challenge = q.get('code_challenge') || '';
   if (q.get('code_challenge_method') !== 'S256' || !/^[A-Za-z0-9_-]{43,128}$/.test(challenge)) return back('invalid_request', 'PKCE with code_challenge_method S256 is required');
-  if (!resourceOk(q.get('resource'), opts.resource)) return back('invalid_target', 'resource is not this openGym\'s MCP address');
+  if (!resourceOk(q.get('resource'), opts.resource)) return back('invalid_target', 'resource is not this AezioGym\'s MCP address');
   for (const [k, v] of pending) if (now - v.at > REQUEST_TTL_MS) pending.delete(k);
   if (pending.size > 1000) pending.delete(pending.keys().next().value);
   const id = rnd(18);

@@ -67,7 +67,7 @@ export function makeTransport({ allowLan }) {
 /** A transport result (or error) in the outbox's words. */
 export function judge(r, err, now = Date.now()) {
   if (err) {
-    if (err.code === 'EBLOCKED') return { ok: false, retry: false, code: 'blocked', msg: 'That address is not one openGym calls.' };
+    if (err.code === 'EBLOCKED') return { ok: false, retry: false, code: 'blocked', msg: 'That address is not one AezioGym calls.' };
     if (err.code === 'ETIMEDOUT') return { ok: false, retry: true, code: 'timeout', msg: 'No answer within 10 seconds.' };
     if (err.code === 'ENOTFOUND' || err.code === 'EAI_AGAIN') return { ok: false, retry: true, code: 'dns', msg: 'The address could not be found.' };
     if (err.code === 'ECONNREFUSED') return { ok: false, retry: true, code: 'refused', msg: 'The receiver refused the connection.' };

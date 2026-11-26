@@ -36,7 +36,7 @@ describe('Glyph', () => {
   })
 
   it('takes an emoji off the end of a translated line', () => {
-    expect(splitEmoji('Your 2026 in openGym is ready 🎉')).toEqual({ text: 'Your 2026 in openGym is ready', emoji: '🎉' })
+    expect(splitEmoji('Your 2026 in AezioGym is ready 🎉')).toEqual({ text: 'Your 2026 in AezioGym is ready', emoji: '🎉' })
     expect(splitEmoji('No peeking 👀')).toEqual({ text: 'No peeking', emoji: '👀' })
     expect(splitEmoji('🎄 Advent')).toEqual({ text: 'Advent', emoji: '🎄' })
     expect(splitEmoji('Plain')).toEqual({ text: 'Plain', emoji: '' })

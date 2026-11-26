@@ -91,7 +91,7 @@ export function buildIcs(S, { uid = 'u', now = Date.now(), tz = S?.reminder?.tz,
   const routines = new Map(list(S?.routines).map(r => [r.id, r]));
   const lines = [
     'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//openGym//Calendar feed//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
-    'X-WR-CALNAME:' + icsText(name ? `openGym · ${name}` : 'openGym'),
+    'X-WR-CALNAME:' + icsText(name ? `AezioGym · ${name}` : 'openGym'),
     'X-PUBLISHED-TTL:PT1H', 'REFRESH-INTERVAL;VALUE=DURATION:PT1H',
   ];
   let n = 0;

@@ -7,7 +7,7 @@ const tr = s => s
 const phone = { mobile: true, android: true, mod: () => true, user: null }
 const offline = { ...phone, offline: true }
 
-describe('Settings in openGym Offline', () => {
+describe('Settings in AezioGym Offline', () => {
   it('has no Coach, Zepp or token pages, and keeps the network log', () => {
     expect(pageVisible('coach', phone)).toBe(true)
     expect(pageVisible('coach', offline)).toBe(false)

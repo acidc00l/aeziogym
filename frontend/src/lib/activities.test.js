@@ -75,7 +75,7 @@ describe('activities: from the health store', () => {
   it('takes a run from Strava, with its day and minutes', () => {
     expect(activityFromHealth(rec, {}, 'hc', now)).toMatchObject({ d: '2026-11-02', sport: 'run', min: 42, src: 'hc' })
   })
-  it('skips openGym\'s own, strength, gym cardio, walks, short ones and the future', () => {
+  it('skips AezioGym\'s own, strength, gym cardio, walks, short ones and the future', () => {
     expect(isOwnRecord({ origin: 'ch.duartesantos.opengym' })).toBe(true)
     expect(isOwnRecord({ origin: 'ch.opengym.app.watchkitapp' })).toBe(true)
     expect(isOwnRecord({ clientId: 'opengym-w-1' })).toBe(true)
@@ -111,7 +111,7 @@ describe('activities: imports', () => {
     expect(hkSportName('HKWorkoutActivityTypeSoccer')).toBe('football')
     expect(hkSportName('HKWorkoutActivityTypeSomethingNew')).toBe('other')
   })
-  it('reads the runs and matches of an Apple Health export, and skips openGym, strength and walks', () => {
+  it('reads the runs and matches of an Apple Health export, and skips AezioGym, strength and walks', () => {
     const xml = `<?xml version="1.0"?><HealthData>
       <Workout workoutActivityType="HKWorkoutActivityTypeRunning" duration="42.5" durationUnit="min" totalDistance="8.2" totalDistanceUnit="km" sourceName="Strava" startDate="2026-10-05 07:00:00 +0200" endDate="2026-10-05 07:42:30 +0200"><MetadataEntry key="x" value="y"/></Workout>
       <Workout workoutActivityType="HKWorkoutActivityTypeTennis" duration="1.5" durationUnit="hr" sourceName="Watch" startDate="2026-10-06 18:00:00 +0200" endDate="2026-10-06 19:30:00 +0200"/>
