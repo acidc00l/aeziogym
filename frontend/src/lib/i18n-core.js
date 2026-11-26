@@ -68,6 +68,7 @@ let lang = 'en'                 // set only by _setLangState, called from i18n.j
 let dict = {}                   // current locale pack (empty = English fallback)
 let instr = null                // { exId: [steps] } for the current language, null = English
 let exerciseNames = null        // { exId: translated name }, null = original catalogue name
+let aezioNames = null           // { exId: nombre de Aezio en castellano }, solo en AezioGym con idioma es
 let enInstr = null              // { exId: [steps] } in English, loaded on first need (instr/en.js)
 let descs = null                // { exId: description } for the current language, when it has any
 let enDescs = null              // { exId: description } in English (exercise-desc/en.js)
@@ -193,6 +194,9 @@ export const descFor = ex => {
   if (!ex) return ''
   const own = descs && descs[ex.id]
   if (own) return own
+  // AezioGym en castellano: no hay descripciones traducidas, y mejor ninguna que una en inglés
+  // junto a un nombre y unos pasos en castellano. Los ejercicios sin nombre de Aezio la conservan.
+  if (hasAezioName(ex)) return ''
   if (!enDescs) askDetails()
   return (enDescs && enDescs[ex.id]) || ex.desc || ''
 }
@@ -228,6 +232,9 @@ export const exerciseOwnName = ex => {
   // A language that chose "English names only" sees the canonical catalogue title, not the
   // translation — and never the parenthetical either. Custom exercises keep their exact name.
   if (enOnly) return ex?.n || ''
+  // AezioGym: el nombre que Marc ha puesto en castellano, tal cual y sin el original entre paréntesis.
+  const aezio = aezioNameFor(ex)
+  if (aezio) return aezio
   const translated = exerciseNames && ex && exerciseNames[ex.id]
   if (!translated) return ex?.n || ''
   // Some names (Burpee, Pilates, brand/model terms) are the established term in the target
@@ -271,7 +278,7 @@ export const exerciseNameClass = ex => (shownNameOf(ex) ? '' : exerciseOwnNameCl
 // not "Am Turm", and "DB press" stays that too (app test 2026-11-11, P10). Title-casing is the
 // catalogue's rule (#290), for names stored lower-case. A name with no exercise behind it (an id
 // this build does not know) keeps the catalogue's rule: it is most likely a catalogue name.
-export const exerciseOwnNameClass = ex => (isOwnExercise(ex) ? '' : !enOnly && exerciseNames && ex && exerciseNames[ex.id]
+export const exerciseOwnNameClass = ex => (isOwnExercise(ex) ? '' : !enOnly && aezioNameFor(ex) ? '' : !enOnly && exerciseNames && ex && exerciseNames[ex.id]
   && CASED_NAME_LANGS.includes(baseLang(lang)) ? '' : 'capitalize')
 // lib/exercises.js knows which exercises are your own (isCustomEx, by where they live) and says
 // so here once it has loaded; this module stays free of the catalogue. Until then the flag decides.
@@ -284,8 +291,16 @@ export const exerciseAsTypedClass = ex => (exerciseNameClass(ex) ? '' : 'nocap')
 // Search both the localized and canonical English title without changing persisted data.
 export const exerciseNameSearchText = ex => {
   const translated = exerciseNames && ex && exerciseNames[ex.id]
-  return translated ? `${translated} ${ex.n}` : (ex?.n || '')
+  const aezio = aezioNameFor(ex)
+  return [aezio, translated, ex?.n].filter(Boolean).join(' ')
 }
+
+// AezioGym: el nombre de Aezio de un ejercicio del catálogo (nunca de uno propio del usuario).
+const aezioNameFor = ex => (aezioNames && ex && !isOwnExercise(ex) && aezioNames[ex.id]) || ''
+/** Si este ejercicio se enseña con el nombre de Aezio en el idioma actual. */
+export const hasAezioName = ex => !enOnly && !!aezioNameFor(ex)
+/** i18n.js entrega aquí los nombres de Aezio (o null) justo antes de _setLangState. */
+export function _setAezioNames(map) { aezioNames = map && typeof map === 'object' ? map : null }
 
 // Called by i18n.js's setLang once the locale pack has been loaded — kept here rather than
 // exported as setLang because loading packs requires import.meta.glob, which is Vite-only.

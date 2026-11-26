@@ -4,10 +4,11 @@
 // subscription hook `useLang`.
 
 import { useSyncExternalStore } from 'react'
+import { aezioBuild } from './build-caps.js'
 import {
   LANGS, INSTR_LANGS, EXERCISE_NAME_LANGS, DATE_LOCALES, DERIVED_LOCALES, RTL_LANGS,
   getLang, dateLocale, t, tn, instrFor, exerciseNameFor, exerciseNameSearchText, getVersion,
-  baseLang, derivePack, _setLangState, exerciseNameClass, exerciseOwnName, exerciseOwnNameClass, exerciseAsTypedClass, descFor, instrTranslated, _setDetailsLoader, _setDetails, _detailsFailed
+  baseLang, derivePack, _setLangState, _setAezioNames, exerciseNameClass, exerciseOwnName, exerciseOwnNameClass, exerciseAsTypedClass, descFor, instrTranslated, _setDetailsLoader, _setDetails, _detailsFailed
 } from './i18n-core.js'
 
 export {
@@ -73,6 +74,12 @@ export async function setLang(l, showEn, enOnly) {
     base === 'en' || !INSTR_LANGS.includes(base) ? null : pack(instrPacks, '../instr/' + base + '.js', null),
     base === 'en' || !EXERCISE_NAME_LANGS.includes(base) ? null : pack(exerciseNamePacks, '../exercise-names/' + base + '.js', null),
   ])
+  // AezioGym en castellano: los nombres de Aezio (scripts/aezio/build-names-es.mjs) mandan sobre los del catálogo.
+  let aezioNames = null
+  if (base === 'es' && aezioBuild()) {
+    try { aezioNames = (await import('../aezio/names-es.json')).default } catch (e) { aezioNames = null }
+  }
+  _setAezioNames(aezioNames)
   _setLangState(l, derivePack(l, dict), derivePack(l, instr), derivePack(l, exerciseNames), show, only)
   if (detailsLoaded) loadDetails()
   document.documentElement.lang = l

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useStore } from '../store/useStore.js'
-import { BODYPARTS, allExercises, equipmentOf, searchExercises } from '../lib/exercises.js'
+import { bodyParts, useVisibleVersion, allExercises, equipmentOf, searchExercises } from '../lib/exercises.js'
 import { activeProfile, exAvailable } from '../lib/equipment.js'
 import { bestWeightFor } from '../lib/history.js'
 import { fmtNum, exCount, exerciseNameText } from '../lib/format.js'
@@ -35,11 +35,12 @@ export default function MuscleExplorer({ onPick, onDetail, onPlan, onBuild, pick
   const moreRef = useAutoMore(() => setShown(s => s + 40))
   // Same rule as the Library and the picker: the active equipment profile narrows the catalogue
   // (and the per-muscle counts) unless the user asks for everything.
+  const visibleV = useVisibleVersion()
   const profile = activeProfile(S)
   const catalog = useMemo(() => {
     const all = allExercises(S)
     return (profile && !showAll) ? all.filter(e => exAvailable(S, e)) : all
-  }, [S.customEx, S.equipFilterOn, S.activeEquipId, S.equipProfiles, showAll])
+  }, [S.customEx, S.equipFilterOn, S.activeEquipId, S.equipProfiles, showAll, visibleV])
   // One pass over the catalogue: asking musclesOf again for each of the muscles (5,632 exercises
   // times every muscle) was a 450 ms freeze when the page opened, 1.8 s on a slow phone (QA 1.4.5).
   const counts = useMemo(() => {
@@ -139,7 +140,7 @@ export default function MuscleExplorer({ onPick, onDetail, onPlan, onBuild, pick
         {favIds(S).length > 0 && <button className={'chip' + (favOn ? ' on' : '')} onClick={() => { setBp(FAV); setEq(''); setShown(40) }}><Icon name="starFill" className="fav-star" />{t('Favourites')} ({favHere})</button>}
         {/* "Body part: Shoulders" for a screen reader: the muscle groups above have a Shoulders too (P4). */}
         <button className={'chip nocap' + (!bp ? ' on' : '')} aria-label={nameIn(t('Body part'), t('All'))} onClick={() => { setBp(''); setEq(''); setShown(40) }}>{t('All')}</button>
-        {BODYPARTS.map(b => <button key={b} className={'chip' + (bp === b ? ' on' : '')} aria-label={nameIn(t('Body part'), t(b))} onClick={() => { setBp(b); setShown(40) }}>{t(b)}</button>)}
+        {bodyParts().map(b => <button key={b} className={'chip' + (bp === b ? ' on' : '')} aria-label={nameIn(t('Body part'), t(b))} onClick={() => { setBp(b); setShown(40) }}>{t(b)}</button>)}
       </div>
       {eqOpts.length > 1 && <div className="chips" style={{ marginBottom: 12 }}>
         <button className={'chip nocap' + (!eqOn ? ' on' : '')} onClick={() => { setEq(''); setShown(40) }}>{t('Any equipment')}</button>

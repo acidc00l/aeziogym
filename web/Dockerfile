@@ -28,6 +28,10 @@ ARG APP_BUILD=""
 # animado (los de 360 px de AezioGym). docker compose: build.args o docker-compose.aezio.yml.
 ARG VITE_CLIP_EXT=""
 ENV VITE_CLIP_EXT=$VITE_CLIP_EXT
+# AezioGym: de dónde se lee la lista de ejercicios visibles ({"ids":[...]}). Vacío = la web de Aezio.
+# La copia de prueba apunta a un JSON local (/aezio-visible.json) que no va en el repositorio.
+ARG VITE_VISIBLE_URL=""
+ENV VITE_VISIBLE_URL=$VITE_VISIBLE_URL
 RUN APP_BUILD="$APP_BUILD" npm run build
 
 FROM nginxinc/nginx-unprivileged:1-alpine

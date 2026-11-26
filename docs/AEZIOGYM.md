@@ -37,6 +37,19 @@ Los medios de Gym visual no están en el repositorio (`catalogue/media/*` se ign
 - El service worker (`frontend/public/sw.js`) guarda para uso sin conexión todo lo que cuelga de
   `/exercise-media/`, sea cual sea la extensión, así que los `.webp` ya quedan cubiertos.
 
+## Ejercicios visibles y nombres de Aezio
+
+- Solo se ofrecen los ejercicios que Aezio publica en `https://aezio.website/api/app/exercises`
+  (`{"ids":[...]}`): biblioteca, buscador, selectores y sugerencias (`allExercises`). El historial, los
+  entrenos y los planes guardados siguen mostrando cualquier ejercicio por su id, y los propios del
+  usuario se ven siempre. Sin lista (null, error, sin red) se usa la última guardada
+  (`localStorage aezio_visible_ex`) y, si no hay ninguna, el catálogo entero. Con `VITE_OPENGYM_FULL=1`
+  no se filtra. `VITE_VISIBLE_URL` cambia el origen de la lista en la compilación.
+- Nombres en castellano de Aezio: `frontend/src/aezio/names-es.json` (id → nombre), generado con
+  `node scripts/aezio/build-names-es.mjs /ruta/al/exercises-data.js` (el de AezioGym 1.2.4). Mandan sobre
+  los del catálogo en el idioma es; el resto de ejercicios conserva el nombre de la 1.4.5. En es no se
+  muestran las descripciones en inglés de esos ejercicios.
+
 ## Producción
 
 ```

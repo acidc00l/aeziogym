@@ -1,8 +1,10 @@
+import { useSyncExternalStore } from 'react'
 import { EXDB, EXALIAS } from './exercises-data.js'
 import MUSCLE_MAP from './exercise-muscle-map.json' with { type: 'json' }
 import V13_IDS from './catalogue-v13-ids.json' with { type: 'json' }
 import { t, getVersion, exerciseNameSearchText, bindOwnExercise } from './i18n-core.js'
 import { exerciseAliases, aliasSnapshot } from './exercise-aliases.js'
+import { aezioBuild, subscribeBuildCaps } from './build-caps.js'
 
 export { EXDB }
 
@@ -123,11 +125,75 @@ export function healCustomEx(list) {
   })
   return changed ? out : list
 }
+// AezioGym: solo se enseñan los ejercicios que Aezio publica en aezio.website («Mis ejercicios»);
+// las animaciones tienen licencia solo para esos. Los demás siguen en EXIDX, así que el historial,
+// los entrenos y los planes ya guardados los siguen mostrando por su id: solo desaparecen de la
+// biblioteca, el buscador, los selectores y las sugerencias (allExercises). Los ejercicios propios
+// del usuario se ven siempre. Sin lista (nunca llegó, o VITE_OPENGYM_FULL=1) se ve el catálogo entero.
+// La última lista buena se guarda en el dispositivo para funcionar sin conexión.
+const VISIBLE_KEY = 'aezio_visible_ex'
+// Dónde se pide la lista. VITE_VISIBLE_URL la cambia en la compilación (la copia de prueba sirve un
+// JSON de reserva); por defecto la web de Aezio, que solo se consulta desde un dominio de aezio.website.
+const VISIBLE_URL = ENV_VISIBLE_URL() || 'https://aezio.website/api/app/exercises'
+function ENV_VISIBLE_URL() { return (import.meta.env || {}).VITE_VISIBLE_URL || '' }
+let visible = null            // Set de ids de catálogo, o null = sin lista
+let visibleVersion = 0
+let visibleCache = null       // { key, list }: CATALOGUE filtrado, rehecho solo si cambia la lista
+const visibleSubs = new Set()
+
+// Un id de dibujo (figura femenina de un ejercicio masculino) vale por el ejercicio que dibuja.
+const toCatalogueId = id => { id = String(id); return EXIDX[id] ? (EXALIAS[id] && EXIDX[EXALIAS[id]] ? EXALIAS[id] : id) : id }
+/** Fija la lista de ids visibles (null la quita). Una lista que no casa con ningún ejercicio se ignora. */
+export function setVisibleExercises(ids) {
+  let next = null
+  if (Array.isArray(ids) && ids.length) {
+    const set = new Set(ids.map(toCatalogueId))
+    if (CATALOGUE.some(e => set.has(e.id))) next = set
+  }
+  const same = (!next && !visible) || (next && visible && next.size === visible.size && [...next].every(id => visible.has(id)))
+  if (same) return false
+  visible = next
+  visibleCache = null
+  visibleVersion++
+  visibleSubs.forEach(fn => { try { fn() } catch { /* un oyente con sus problemas */ } })
+  return true
+}
+const filtering = () => aezioBuild() && !!visible
+/** El catálogo que se ofrece: los visibles de Aezio, o todo si no hay lista o no es AezioGym. */
+export const visibleCatalogue = () => {
+  if (!filtering()) return CATALOGUE
+  if (!visibleCache || visibleCache.v !== visibleVersion) visibleCache = { v: visibleVersion, list: CATALOGUE.filter(e => visible.has(e.id)) }
+  return visibleCache.list
+}
+/** Las partes del cuerpo que tienen algún ejercicio visible. */
+export const bodyParts = () => (filtering() ? [...new Set(visibleCatalogue().map(e => e.bp))].sort() : BODYPARTS)
+export const subscribeVisible = fn => { visibleSubs.add(fn); return () => visibleSubs.delete(fn) }
+/** Cambia cuando llega otra lista o cambia el modo AezioGym; para que las listas se repinten. */
+export const useVisibleVersion = () => useSyncExternalStore(subscribeVisible, () => visibleVersion)
+subscribeBuildCaps(() => { visibleCache = null; visibleVersion++; visibleSubs.forEach(fn => { try { fn() } catch { /* idem */ } }) })
+try { setVisibleExercises(JSON.parse(localStorage.getItem(VISIBLE_KEY) || 'null')) } catch { /* sin almacenamiento */ }
+
+/** Pide la lista a la web de Aezio y la guarda. Sin lista, con error o sin red se queda la anterior. */
+export function loadVisibleExercises() {
+  if (typeof window === 'undefined' || !aezioBuild()) return Promise.resolve()
+  const own = /^\//.test(VISIBLE_URL) || /(^|\.)aezio\.website$/.test(location.hostname)
+  if (!own) return Promise.resolve()
+  return fetch(VISIBLE_URL, { credentials: 'omit' })
+    .then(r => (r.ok ? r.json() : null))
+    .then(d => {
+      if (!d || !Array.isArray(d.ids) || !d.ids.length) return
+      if (!setVisibleExercises(d.ids) && visible) return
+      try { localStorage.setItem(VISIBLE_KEY, JSON.stringify(d.ids)) } catch { /* sin almacenamiento */ }
+    })
+    .catch(() => { /* sin conexión: se queda la lista guardada */ })
+}
+
 // Full searchable catalogue — customs first so your own exercises are easy to find.
-// Every exercise you can pick: yours, then the catalogue's, less any merged into another (#656,
-// lib/exercise-merge.js): a catalogue exercise cannot be removed, so a merge hides it instead.
+// Every exercise you can pick: yours, then the catalogue's (in AezioGym, only the visible ones),
+// less any merged into another (#656, lib/exercise-merge.js): a catalogue exercise cannot be
+// removed, so a merge hides it instead.
 export const allExercises = st => {
-  const all = [...(st?.customEx || []), ...CATALOGUE]
+  const all = [...(st?.customEx || []), ...visibleCatalogue()]
   const m = st?.exMerged
   if (!m || typeof m !== 'object') return all
   const away = new Set(Object.keys(m).filter(k => m[k] && m[k].into))
