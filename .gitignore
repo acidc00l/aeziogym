@@ -1,13 +1,66 @@
-# Datos de cada instalación: usuarios, passkeys, claves de sesión y de avisos.
-# La API los crea sola la primera vez que arranca. Nunca se suben.
-.env
+# Exercise media downloaded by installs before v1.4.0 (now in catalogue/media); kept ignored so an
+# old folder never gets committed by accident
+media/img/
+media/gif/
+
+# Runtime data — users, passkeys, per-user state, session secret
 data/
+
+# Local config
+.env
+
+# Build output / deps
+frontend/dist/
 node_modules/
-dist/
+*.log
 .DS_Store
+node_modules
+.claude/
+.agents/
+.superpowers/
 
-# Imágenes y animaciones de ejercicios: © Gym visual, no se distribuyen en este repositorio
-media/
+# Nix build result symlinks
+result
+result-*
 
-# Scripts internos de Aezio (no públicos)
+# CI reports (test:* jobs write these next to the suites)
+junit.xml
+coverage/
+test-results.json
+test-results.jsonl
+lcov.info
+/stats/
+frontend/bundle-size.json
+
+# Local planning notes
+docs/superpowers/plans/
+
+# Python and Kotlin build leftovers (scripts/, the Android build)
+__pycache__/
+*.pyc
+.kotlin/
+
+# The maintainer's brand material (logo variants, merch, Buy Me a Coffee covers) sits next to the
+# tracked banner and screenshots but is not part of the repository; keep it out of a `git add -A`
+assets/logo/
+assets/merch/
+assets/tee/
+assets/bmc-cover*
+# scripts/pdf/render-samples.mjs output (npm run pdf:check)
+frontend/pdf-samples/
+
+# SwiftPM build output of the WatchCore package
+frontend/ios/App/WatchCore/.build/
+
+# Cloudflare fallback build (cloudflare/build.sh)
+/dist/
+.wrangler/
+.taste-skill/
+
+# Aezio: medios propios (c) Gym visual, licencia de Aezio, fuera del repositorio
+/media/
 scripts/sync_media_visibles.py
+
+# Medios de Gym visual (licenciados solo a openGym): nunca en git
+catalogue/media/*
+!catalogue/media/NOTICE.md
