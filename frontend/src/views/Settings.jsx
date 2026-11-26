@@ -1351,7 +1351,7 @@ export default function Settings({ page = null, find = null, via = null, entryKe
         {/* Attribution the media licence asks for word for word (agreement §8c), so it is not translated.
             The spans keep each link's words above its neighbours' 44 px tap targets (index.css). */}
         Exercise media © Aliaksandr Makatserchyk, <a href="https://gymvisual.com/" target="_blank" rel="noopener"><span>Gym visual</span></a>, gymvisual.com.
-        {t('Media licensed to Aezio by Gym visual for use in AezioGym; see')} <a href="https://github.com/acidc00l/aeziogym/blob/main/NOTICE.md" target="_blank" rel="noopener"><span>NOTICE.md</span></a>
+        {' '}{t('Media licensed to Aezio by Gym visual for use in AezioGym; see')} <a href="https://github.com/acidc00l/aeziogym/blob/main/NOTICE.md" target="_blank" rel="noopener"><span>NOTICE.md</span></a>
       </div>
     </>,
 
