@@ -8,3 +8,6 @@ dist/
 
 # Imágenes y animaciones de ejercicios: © Gym visual, no se distribuyen en este repositorio
 media/
+
+# Scripts internos de Aezio (no públicos)
+scripts/sync_media_visibles.py
