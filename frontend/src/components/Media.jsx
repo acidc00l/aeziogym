@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { imgSrc, gifSrc } from '../lib/exercises.js'
+import { imgSrc, gifSrc, webpSrc } from '../lib/exercises.js'
 import { useStore } from '../store/useStore.js'
 import { t } from '../lib/i18n.js'
 import Icon from './Icon.jsx'
@@ -11,14 +11,17 @@ import Icon from './Icon.jsx'
 // future workouts (issue #12).
 export default function Media({ ex, id, compact, minimizable }) {
   const [playing, setPlaying] = useState(true)
+  const [webpFailed, setWebpFailed] = useState(null) // nombre del GIF cuyo WebP no cargó
   const gifSize = useStore(s => s.S.gifSize)
   const update = useStore(s => s.update)
   if (!ex.gif) return null
   const mini = minimizable && gifSize === 'mini'
+  const useWebp = playing && webpFailed !== ex.gif
+  const onImgError = () => { if (useWebp) setWebpFailed(ex.gif) } // una sola vez: luego es el GIF
   const toggleSize = e => { e.stopPropagation(); update(s => { s.gifSize = mini ? 'full' : 'mini' }) }
   return (
     <div className={'exmedia' + (compact ? ' compact' : '') + (mini ? ' mini' : '')} id={id} onClick={() => setPlaying(p => !p)}>
-      <img decoding="async" src={playing ? gifSrc(ex) : imgSrc(ex)} alt={ex.n} />
+      <img decoding="async" src={useWebp ? webpSrc(ex) : playing ? gifSrc(ex) : imgSrc(ex)} alt={ex.n} onError={onImgError} />
       {minimizable && (
         <button className="giftoggle" onClick={toggleSize}>
           <Icon name={mini ? 'expand' : 'minimize'} />{mini ? t('Expand') : t('Minimize')}

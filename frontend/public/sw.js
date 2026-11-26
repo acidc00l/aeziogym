@@ -1,6 +1,6 @@
 /* openGym service worker — runtime caching (works with Vite's hashed asset names).
-   Media (img/gif) cache-first; everything else network-first with offline fallback. */
-const CACHE = 'aezio-gym-v23890-htt'
+   Media (img/gif/webp) cache-first; everything else network-first with offline fallback. */
+const CACHE = 'aezio-gym-v23891-htt'
 
 self.addEventListener('install', () => self.skipWaiting())
 self.addEventListener('activate', e => {
@@ -31,7 +31,7 @@ self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET' || url.origin !== location.origin) return
   if (url.pathname.startsWith('/api/')) return    // never cache auth/data
 
-  const isMedia = url.pathname.includes('/img/') || url.pathname.includes('/gif/')
+  const isMedia = url.pathname.includes('/img/') || url.pathname.includes('/gif/') || url.pathname.includes('/webp/')
 
   if (isMedia) {
     e.respondWith(caches.open(CACHE).then(c => c.match(e.request).then(hit =>

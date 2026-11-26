@@ -57,8 +57,12 @@ export const allExercises = st => [...(st.customEx || []), ...visibleExercises()
 // shipping ~140 MB of images into the deployment.
 const IMG_BASE = import.meta.env.VITE_IMG_BASE || 'img/'
 const GIF_BASE = import.meta.env.VITE_GIF_BASE || 'gif/'
+const WEBP_BASE = import.meta.env.VITE_WEBP_BASE || 'webp/'
 export const imgSrc = ex => IMG_BASE + ex.img
 export const gifSrc = ex => GIF_BASE + ex.gif
+// WebP animado de 360 px: mismo nombre base que el GIF. Solo existe para los ejercicios visibles;
+// si falta, Media.jsx cae al GIF.
+export const webpSrc = ex => WEBP_BASE + ex.gif.replace(/\.gif$/i, '') + '.webp'
 
 // Cardio exercises log time + speed instead of weight × reps.
 export const isCardio = idOrEx => (typeof idOrEx === 'string' ? EXIDX[idOrEx] : idOrEx)?.bp === 'cardio'
