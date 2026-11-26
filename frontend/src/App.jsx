@@ -1,7 +1,7 @@
 import { Suspense, lazy, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { DEMO } from './lib/demo.js'
 import { useDailyWebdav } from './lib/use-daily-webdav.js'
-import { offlineBuild } from './lib/build-caps.js'
+import { offlineBuild, aezioBuild } from './lib/build-caps.js'
 import { hideBoot } from './lib/boot.js'
 import { HashRouter, Routes, Route, Navigate, useNavigate, useLocation, useNavigationType } from 'react-router-dom'
 import { useStore } from './store/useStore.js'
@@ -417,9 +417,9 @@ function Shell() {
       {isOn(S, 'body') && <Route path="/progress-photos" element={<ProgressPhotos />} />}
       {isOn(S, 'body') && <Route path="/measurements" element={<Measurements />} />}
       {/* The MCP connector's consent screen (api/oauth.js): an assistant sent the browser here. */}
-      <Route path="/connect/:id" element={<Connect />} />
+      <Route path="/connect/:id" element={aezioBuild() ? <Navigate to="/home" replace /> : <Connect />} />
       {/* Use your subscription: openGym as a connector in Claude, ChatGPT or Gemini (sub-connect-146). */}
-      <Route path="/assistants" element={<Assistants />} />
+      <Route path="/assistants" element={aezioBuild() ? <Navigate to="/home" replace /> : <Assistants />} />
       <Route path="/settings" element={<SettingsRoute />} />
       <Route path="/settings/:page" element={<SettingsRoute />} />
       {/* The Coach screens gate themselves on the instance config; the routes exist whenever the

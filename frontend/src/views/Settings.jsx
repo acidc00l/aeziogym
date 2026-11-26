@@ -945,7 +945,7 @@ export default function Settings({ page = null, find = null, via = null, entryKe
       <Section>
         {/* The target range of weekly sets for each main muscle (lib/muscle-targets.js). */}
         <Row icon="slider" iconTint="var(--teal)" title={t('Weekly sets per muscle')} subtitle={t('The range each muscle aims for')} accessory="chevron" onClick={muscleTargetsSheet} />
-        <Row icon="clipboard" iconTint="var(--green)" title={t('Load starter plan')} accessory="chevron" onClick={starterPlanSheet} />
+        {!aezioBuild() && <Row icon="clipboard" iconTint="var(--green)" title={t('Load starter plan')} accessory="chevron" onClick={starterPlanSheet} />}
       </Section>
     </>,
 

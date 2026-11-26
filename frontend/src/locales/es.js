@@ -5903,4 +5903,6 @@ export default {
   "Your workouts are safe on this device and will upload as soon as you sign in again.": "Tus entrenos están a salvo en este dispositivo y se subirán en cuanto vuelvas a entrar.",
   "Sign in again": "Volver a entrar",
   "Advertisement": "Publicidad",
+  "To get started, open your plan on aezio.website and tap «Add to my app». You can also build your own routine.": "Para empezar, abre tu plan en aezio.website y pulsa «Añadir a mi app». También puedes crear tu propia rutina.",
+  "Add your plan from aezio.website with «Add to my app», or create a routine.": "Añade tu plan desde aezio.website con «Añadir a mi app», o crea una rutina.",
 }

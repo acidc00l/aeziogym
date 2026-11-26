@@ -5907,4 +5907,6 @@ export default {
   "Your workouts are safe on this device and will upload as soon as you sign in again.": "Your workouts are safe on this device and will upload as soon as you sign in again.",
   "Sign in again": "Sign in again",
   "Advertisement": "Advertisement",
+  "To get started, open your plan on aezio.website and tap «Add to my app». You can also build your own routine.": "To get started, open your plan on aezio.website and tap «Add to my app». You can also build your own routine.",
+  "Add your plan from aezio.website with «Add to my app», or create a routine.": "Add your plan from aezio.website with «Add to my app», or create a routine.",
 }

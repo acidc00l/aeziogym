@@ -8,6 +8,7 @@ import { StreakFlame, StreakMeta, StreakParty } from '../components/Streak.jsx'
 import { StreakRuleWelcome } from '../components/StreakRule.jsx'
 import { fmtNum, fmtDate, todayISO, isoOf, weekStartOf, weekDayOffset, DAYS, DAYN } from '../lib/format.js'
 import { t, tn, dateLocale } from '../lib/i18n.js'
+import { aezioBuild } from '../lib/build-caps.js'
 import { bwSheet, goalSheet, dayOverrideSheet, calendarSheet, starterPlanSheet, bwDeltaColor, weighInsSheet } from '../sheets.jsx'
 import { startOrPreview, startPickerSheet } from '../components/StartSheets.jsx'
 import { daySessionsStatus } from '../lib/day-sessions.js'
@@ -250,9 +251,15 @@ export default function Home() {
 
     {!S.routines.length && !S.active && (
       <div className="card">
-        <CardHead icon="calendar" title={t('Welcome!')} sub={t('Set up your weekly routine to get going, or grab a ready-made starter plan.')} />
-        <Button variant="primary" icon="clipboard" onClick={starterPlanSheet}>{t('Load starter plan')}</Button>
-        <div style={{ height: 8 }} /><Button onClick={() => nav('/plan')}>{t('Build my own plan')}</Button>
+        {/* AezioGym: los planes los hace Marc y llegan con «Añadir a mi app»; no hay plan de inicio automático. */}
+        {aezioBuild() ? <>
+          <CardHead icon="calendar" title={t('Welcome!')} sub={t('To get started, open your plan on aezio.website and tap «Add to my app». You can also build your own routine.')} />
+          <Button variant="primary" onClick={() => nav('/plan')}>{t('Build my own plan')}</Button>
+        </> : <>
+          <CardHead icon="calendar" title={t('Welcome!')} sub={t('Set up your weekly routine to get going, or grab a ready-made starter plan.')} />
+          <Button variant="primary" icon="clipboard" onClick={starterPlanSheet}>{t('Load starter plan')}</Button>
+          <div style={{ height: 8 }} /><Button onClick={() => nav('/plan')}>{t('Build my own plan')}</Button>
+        </>}
       </div>
     )}
 

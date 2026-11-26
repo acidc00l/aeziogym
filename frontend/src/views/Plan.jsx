@@ -1,3 +1,4 @@
+import { aezioBuild } from '../lib/build-caps.js'
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
@@ -168,7 +169,7 @@ export default function Plan() {
         { icon: 'note', label: t('Print / Save as PDF'), disabled: !has, onClick: printWholePlan },
         { icon: 'download', label: t('Import a plan file'), onClick: () => fileRef.current?.click() },
         { icon: 'qr', label: t('Scan a QR code'), sub: t('A routine from a friend’s phone, the website or the poster by the squat rack.'), onClick: () => import('../components/ScanCode.jsx').then(m => m.scanQrCode()) },
-        { icon: 'clipboard', label: t('Load starter plan'), onClick: starterPlanSheet },
+        ...(aezioBuild() ? [] : [{ icon: 'clipboard', label: t('Load starter plan'), onClick: starterPlanSheet }]),
         { icon: 'history', label: t('Routine from a past workout'), disabled: !routineSources(S.workouts, 1).length, onClick: () => routineFromWorkoutSheet(id => nav('/plan/r/' + id)) },
         { icon: 'calendar', label: t('Programmes'), sub: t('Your routines as a block of weeks, with starter programmes to try.'), onClick: () => nav('/plan/programmes') },
       ],
@@ -333,8 +334,8 @@ function Schedule({ S, update, nav, mode }) {
       <SeasonDeco spot="plan-card" />
     </Section>
 
-    {!S.routines.length && <EmptyState className="plan-empty" icon="clipboard" title={t('No routines yet.')} text={t('Make one, or grab the starter plan to get going.')}>
-      <Button variant="tinted" icon="clipboard" onClick={starterPlanSheet}>{t('Load starter plan')}</Button>
+    {!S.routines.length && <EmptyState className="plan-empty" icon="clipboard" title={t('No routines yet.')} text={aezioBuild() ? t('Add your plan from aezio.website with «Add to my app», or create a routine.') : t('Make one, or grab the starter plan to get going.')}>
+      {!aezioBuild() && <Button variant="tinted" icon="clipboard" onClick={starterPlanSheet}>{t('Load starter plan')}</Button>}
       <Button variant="plain" icon="plus" onClick={() => newRoutine(update, nav)}>{t('New routine')}</Button>
       {/* Workouts but no routines, an imported history mostly (#1010): start from those. */}
       {routineSources(S.workouts, 1).length > 0 && <Button variant="plain" icon="history" onClick={() => routineFromWorkoutSheet(id => nav('/plan/r/' + id))}>{t('From a past workout')}</Button>}
@@ -528,8 +529,8 @@ function Routines({ S, update, nav }) {
         })}
       <p className="sect-f">{edit ? t('Drag to reorder. Tap the minus to delete.') : t('Tap a routine to edit it. Reorder and delete are behind Edit.')}</p>
     </> : <>
-      <EmptyState icon="clipboard" title={t('No routines yet.')} text={t('Make one, or grab the starter plan to get going.')}>
-        <Button variant="tinted" icon="clipboard" onClick={starterPlanSheet}>{t('Load starter plan')}</Button>
+      <EmptyState icon="clipboard" title={t('No routines yet.')} text={aezioBuild() ? t('Add your plan from aezio.website with «Add to my app», or create a routine.') : t('Make one, or grab the starter plan to get going.')}>
+        {!aezioBuild() && <Button variant="tinted" icon="clipboard" onClick={starterPlanSheet}>{t('Load starter plan')}</Button>}
       </EmptyState>
     </>}
   </>
