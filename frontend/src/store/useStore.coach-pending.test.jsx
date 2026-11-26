@@ -137,4 +137,18 @@ describe('pullCoachPending', () => {
     await useStore.getState().pullCoachPending()
     expect(api).not.toHaveBeenCalled()
   })
+
+  it('tras iniciar sesión (adopción retenida) pide la cola al terminar la adopción, sin esperar a un foco', async () => {
+    server({ items: [{ key: 'k9', kind: 'exercises', plan_id: 7, bundle: bundle(7) }] })
+    localStorage.removeItem('gym_owner')
+    useStore.setState({ ready: true })
+    useStore.getState().setUser(USER, { adopt: true })
+    // La retención está puesta: el efecto de arranque de la app no consulta nada.
+    await useStore.getState().pullCoachPending()
+    expect(calls()).not.toContain('GET /api/coach-pending')
+    await useStore.getState().adoptProfile(async () => true)
+    await vi.waitFor(() => expect(calls().filter(c => c === 'GET /api/coach-pending')).toHaveLength(1))
+    await new Promise(r => setTimeout(r, 30))
+    expect(calls().filter(c => c === 'GET /api/coach-pending')).toHaveLength(1)
+  })
 })

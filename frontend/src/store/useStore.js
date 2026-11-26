@@ -463,7 +463,14 @@ export const useStore = create((set, get) => {
   // Sync held or not, and the screens told (`sync.held`, status 'held').
   const setHold = on => { adoptHold = on; if (get()?.sync) setSync({ held: on }) }
   // The question is answered: sync as usual from here.
-  const releaseAdopt = () => { setHold(false); writeAdopt(null) }
+  // Si la adopción retenía la sincronización, la cola del entrenador que se saltó mientras tanto
+  // se pide ahora (una vez, en el siguiente turno: la adopción termina lo suyo antes). La protege
+  // pullCoachPending (sin sesión, sandbox, ya en curso o muy reciente no hace nada).
+  const releaseAdopt = () => {
+    const wasHeld = adoptHold
+    setHold(false); writeAdopt(null)
+    if (wasHeld) setTimeout(() => { if (!adoptHold) get().pullCoachPending() }, 0)
+  }
   const readStoredSync = () => { try { return JSON.parse(localStorage.getItem(SYNC_KEY)) || null } catch { return null } }
   const storedOwed = () => { try { return localStorage.getItem(DIRTY_KEY) === '1' } catch { return false } }
 
