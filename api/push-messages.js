@@ -97,6 +97,6 @@ const nudgeCopyFor = lang => {
 export function nudgePush(lang, tone, routine, iso) {
   const copy = nudgeCopyFor(lang)[NUDGE_COPY.en[tone] ? tone : 'friendly'];
   const line = copy.lines[lineIndex(iso, copy.lines.length)];
-  const name = routine?.name || 'openGym';
+  const name = routine?.name || 'AezioGym';
   return { title: copy.title, body: line.replace('{0}', () => name), tag: 'nudge' };
 }

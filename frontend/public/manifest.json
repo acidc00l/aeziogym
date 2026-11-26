@@ -1,7 +1,7 @@
 {
-  "name": "openGym",
-  "short_name": "openGym",
-  "description": "Personal gym & body weight tracker",
+  "name": "AezioGym",
+  "short_name": "AezioGym",
+  "description": "Registra tus entrenos, sigue tu plan y mide tu progreso.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

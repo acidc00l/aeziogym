@@ -211,7 +211,7 @@ self.addEventListener('push', e => {
     // the previous notification with the same tag is closed by hand first.
     const tag = data.tag || 'opengym'
     try { for (const n of await self.registration.getNotifications({ tag })) n.close() } catch {}
-    await self.registration.showNotification(data.title || 'openGym', {
+    await self.registration.showNotification(data.title || 'AezioGym', {
       body: data.body || '',
       icon: 'icon-512.png',
       // The status bar draws the badge as a mask: the mark in white on clear, not the square icon.

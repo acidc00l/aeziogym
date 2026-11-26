@@ -1518,7 +1518,7 @@ function SettingsRoot({ ctx, preview, open, user, sync, home, go, entryKey }) {
             accessory="chevron" onClick={() => nav('/assistants')} className="sp-root-row" />}
         </Section>
       ))}
-      <div className="dim small sp-version">openGym v{__APP_VERSION__}</div>
+      <div className="dim small sp-version">AezioGym v{__APP_VERSION__}</div>
     </>}
   </div>
 }

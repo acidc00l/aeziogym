@@ -10,7 +10,7 @@ import { inkIn } from './accent.js'
 export const FORMATS = { story: { width: 1080, height: 1920 }, square: { width: 1080, height: 1080 } }
 export const FORMAT_IDS = Object.keys(FORMATS)
 export const STYLE_IDS = ['dark', 'light']
-export const SITE = 'opengym.ch'
+export const SITE = 'aezio.website'
 
 /**
  * The colours of a card, the app's own (index.css) in a fixed light or dark look, whatever the
@@ -122,7 +122,7 @@ export function drawBrand(ctx, { x, y, width, colors, family, size = 40, badge: 
   ctx.textAlign = 'left'
   ctx.font = `700 ${size}px ${family}`
   if ('letterSpacing' in ctx) ctx.letterSpacing = `${(-size * 0.036).toFixed(2)}px`
-  const textW = ctx.measureText('openGym').width
+  const textW = ctx.measureText('AezioGym').width
   const lockW = markH * MARK_ASPECT + gap + textW
   let lx = x
   if (badge) {
@@ -135,8 +135,8 @@ export function drawBrand(ctx, { x, y, width, colors, family, size = 40, badge: 
   drawMark(ctx, lx, y - size * 0.36, markH, BRAND.green)
   let tx = lx + markH * MARK_ASPECT + gap
   ctx.fillStyle = onDark ? BRAND.light : BRAND.dark
-  ctx.fillText('open', tx, y)
-  tx += ctx.measureText('open').width
+  ctx.fillText('Aezio', tx, y)
+  tx += ctx.measureText('Aezio').width
   ctx.fillStyle = BRAND.green
   ctx.fillText('Gym', tx, y)
   if ('letterSpacing' in ctx) ctx.letterSpacing = '0px'
