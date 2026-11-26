@@ -121,6 +121,7 @@ import { workoutsOn, backfillStart, backfillEnd, completeBackfill, historyAsOf, 
 import { moveWorkout, sameWorkout, startTimeOf, durationMinOf, setWorkoutDuration, rebuildPrHistory, MAX_DURATION_MIN, endsInFuture } from './lib/workout-date.js'
 import { editCompletedSession, editLeftEmpty, editedRecord, editChangesNothing } from './lib/session-edit.js'
 import { stampWorkout } from './lib/sync-merge.js'
+import { coachNextRoutine } from './lib/coach-import.js'
 import { hrLabel } from './lib/heart-rate.js'
 import { weeklyWeights } from './lib/bodyweight.js'
 import { workoutText } from './lib/workout-text.js'
@@ -3393,7 +3394,9 @@ function DayOverride({ iso, close }) {
   // A planned day in the past with nothing logged was missed — or trained and never logged,
   // like a run you forgot to start the app for (#284). Logging it opens "Log a past workout" on
   // that date with the day's routines picked, where the time and the duration can still change.
-  const missed = iso < todayISO() && effIds.length > 0 && !workoutsOn(st, iso).length
+  // Anotado después y a la espera de que el entrenador lo confirme (AezioGym): no se anota dos veces.
+  const pendingHere = (st.pendingWorkouts || []).filter(w => w.d === iso)
+  const missed = iso < todayISO() && effIds.length > 0 && !workoutsOn(st, iso).length && !pendingHere.length
   const logIt = () => { close(); logPastWorkoutSheet({ iso, routineIds: effIds }) }
   // A note on a day off (#261, lib/day-notes.js): offered on today and past days with nothing
   // logged, kept in view on any day that already has one. Quiet on purpose: a row, not a button.
@@ -3425,6 +3428,8 @@ function DayOverride({ iso, close }) {
   return <>
     <h3>{fmtDate(iso, true)}</h3>
     <div className="muted small" style={{ marginBottom: 12 }}>{t('Weekly plan:')} {weeklyNames.length ? deriveSessionName(weeklyNames) : t('Rest')}{changed && <span style={{ color: 'var(--orange-ink)' }}> · {t('changed for this day')}</span>}<br />{t('Sick, missed a day or want a different session? Pick what to train instead.')}</div>
+    {pendingHere.map(w => <div key={w.id} className="small" style={{ marginBottom: 12, color: 'var(--orange-ink)' }}>
+      <Icon name="clock" /> {t('{0} logged afterwards: waiting for your coach to confirm it.', w.name)}</div>)}
     {missed && <div style={{ marginBottom: 14 }}><Button variant="primary" icon="checkCircle" onClick={logIt}>{t('Log this workout')}</Button></div>}
     {canNote && <div className="day-note" style={{ marginBottom: 14 }}>
       <div className="item day-note-row" {...tappable(() => dayNoteSheet(iso))}>
@@ -3910,6 +3915,7 @@ function Calendar({ start, close, help = false }) {
   const monthMs = monthWs.reduce((a, w) => a + Math.max(0, (w.end || w.start) - w.start), 0)
   const cells = []
   for (let i = 0; i < startOffset; i++) cells.push(<div key={'e' + i} />)
+  const pendingDays = new Set((st.pendingWorkouts || []).map(w => w.d))
   for (let d = 1; d <= daysIn; d++) {
     const iso = y + '-' + String(mo + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0')
     // A fulfilled pin (a coach session pinned here and since done) reads as no override, as it does everywhere else.
@@ -3919,12 +3925,13 @@ function Calendar({ start, close, help = false }) {
     const note = !ws && dayNoteOf(st, iso)
     // A planned day gone by without a workout is missed, not still planned (Discord 11-04: it
     // looked like a day still to come). Only the week counts for the streak; the day says so.
-    const missed = !ws && !note && planned && iso < today
+    const pend = !ws && pendingDays.has(iso)   // anotado después, esperando al entrenador (AezioGym)
+    const missed = !ws && !note && !pend && planned && iso < today
     // A trained day that was moved keeps a hint of the orange (index.css .cal-d i.moved).
     const moved = !!ws && ovr && st.dayPlan[iso] !== 'rest'
     const rec = !ws && recDays.has(iso)
     const act = !ws && actDays.has(iso)
-    const dotCls = ws ? (moved ? 'done moved' : 'done') : note ? 'noted' : act ? 'sport' : rec ? 'recov' : missed ? 'miss' : ovr && planned ? 'ovr' : planned ? 'plan' : ''
+    const dotCls = ws ? (moved ? 'done moved' : 'done') : pend ? 'ovr' : note ? 'noted' : act ? 'sport' : rec ? 'recov' : missed ? 'miss' : ovr && planned ? 'ovr' : planned ? 'plan' : ''
     const wkOf = weeks ? weekKey(iso, weekStartOf(st)) : null
     const frozenDay = !!wkOf && weeks.log.get(wkOf)?.s === 'frozen'
     const excusedDay = !!wkOf && weeks.log.get(wkOf)?.s === 'excused'
@@ -4689,12 +4696,15 @@ function KeepInRoutine({ additions }) {
 
 function FinishSummary({ w, prs, e1prs = [], additions = [], close }) {
   const st = useStore(s => s.S)
+  // Entreno de una rutina de Aezio: qué día toca ahora (el que lleva más tiempo sin hacerse)
+  const next = coachNextRoutine(st, w)
   return <div style={{ textAlign: 'center', padding: '8px 0' }}>
     {/* Sticky, so the summary can be left from the top however far it has been scrolled. */}
     <div className="fin-x"><button type="button" className="iconbtn" aria-label={t('Close')} onClick={() => closeThenNav(close, '/home')}><Icon name="xmark" /></button></div>
     <div style={{ fontSize: '2.75rem', display: 'flex', justifyContent: 'center', color: 'var(--acc-ink)', position: 'relative' }}><Icon name="trophy" /><SeasonDeco spot="finish" workout /></div>
     <h3 style={{ margin: '8px 0' }}>{t('Workout complete!')}</h3>
     <AutoEndedNote w={w} />
+    {next && <div className="small accent" style={{ marginBottom: 10 }}>{t('Logged in your Aezio routine · Next: {0}', next.name)}</div>}
     <div className="tiles fin" style={{ textAlign: 'start' }}>
       <div className="tile"><div className="l">{t('Duration')}</div><div className="v v-sm">{fmtDur(w.end - w.start)}</div></div>
       <div className="tile"><div className="l">{t('Volume')}</div><div className="v v-sm">{fmtVol(sessionVolume(w, st), st.unit)}</div></div>
@@ -4760,6 +4770,10 @@ export function finishWorkoutSheet({ onDiscard } = {}) {
 // what the phone's Finish and save runs.
 // `end` and `auto` (lib/forgotten-workout.js): a workout that ended by itself is saved ending at
 // its last set plus the usual rest, marked as such, and can be reopened for 24 hours.
+// Con un entrenador de Aezio (rutinas importadas), un entreno anotado después no cuenta para nada hasta
+// que lo confirme: espera en `pendingWorkouts` (docs/AEZIOGYM.md, «Contrato Aezio ↔ AezioGym»).
+export const hasCoach = st => (st.routines || []).some(r => String(r.id).startsWith('aezio-'))
+
 export const finishWorkoutNow = (opts) => doFinishWorkout(opts && typeof opts === 'object' && !opts.nativeEvent ? opts : undefined)
 function doFinishWorkout({ end: endAt, auto } = {}) {
   // A circuit's clock still running (store/useCircuit.js) stops first, so its result is saved too.
@@ -4768,6 +4782,8 @@ function doFinishWorkout({ end: endAt, auto } = {}) {
   const A = st.active
   if (!A) return
   const past = !!A.backfill
+  // Anotado después, de una rutina de Aezio y no una edición de uno ya guardado: espera al entrenador.
+  const awaitsCoach = past && !A.backfill.replaceId && hasCoach(st)
   // A workout logged into the past is held against the history before it, the way an edit of a
   // saved one is (rebuildPrHistory, below): it gains a badge it leads with, and a later session
   // it outdoes loses its own. It used to report none at all while the editor's Save awarded them
@@ -4795,7 +4811,10 @@ function doFinishWorkout({ end: endAt, auto } = {}) {
   const additions = past ? [] : routineAdditions(A, st.routines)
   let shown = w
   update(s => {
-    if (past) {
+    if (awaitsCoach) {
+      stampWorkout(w)
+      s.pendingWorkouts = [...(Array.isArray(s.pendingWorkouts) ? s.pendingWorkouts : []), { ...w, pending: true }]
+    } else if (past) {
       // Its start and end are in the past; the stamp says when it was logged, which is what a
       // merge after a reset elsewhere asks of it (lib/sync-merge.js sinceReset).
       stampWorkout(w)
@@ -4822,6 +4841,12 @@ function doFinishWorkout({ end: endAt, auto } = {}) {
   })
   useStore.getState().autoBackupNow()
   useUI.getState().stopRest()
+  if (awaitsCoach) {
+    useUI.getState().stopWork()
+    nav('/home')
+    toast(t('Logged for {0}. It counts once your coach confirms it.', fmtDate(w.d)))
+    return
+  }
   // A hold still counting (a plank left unchecked, then Finish early) goes with the workout, as
   // on Discard: its bar is app-wide and would chime over the summary, and its callback writes
   // into s.active, which is gone. What it held is not logged, like any set left unchecked.

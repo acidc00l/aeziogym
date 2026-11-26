@@ -33,6 +33,8 @@ import { DEFAULT_TEMPLATE_ID } from '../lib/structuralBalanceTemplates.js'
 import { WC_DEFAULT } from '../lib/workout-controls.js'
 import { sanitizeAccent, NEW_ACCENT } from '../lib/accent.js'
 import { registerExerciseAliases } from '../lib/exercise-aliases.js'
+import { applyCoachPending } from '../lib/coach-import.js'
+import { aezioBuild } from '../lib/build-caps.js'
 
 const KEY = 'gym_state_v1'
 // Where the saved copy stands with the server: the revision it descends from, and its own `_ts`
@@ -47,6 +49,9 @@ const WID_KEY = 'gym_state_wid'
 // Whose copy that write was: the owner (gym_owner) the writing tab held, '' for a guest's. A tab
 // joins only a copy written under the owner it holds itself (joinSaved, syncFromSaved).
 const WID_OWNER_KEY = 'gym_state_owner'
+// AezioGym: the keys of the coach's queue (Aezio, GET /api/coach-pending) this device already applied,
+// so a retry of the acknowledgement never applies a plan twice over what the client edited since.
+const COACH_APPLIED_KEY = 'gym_coach_applied'
 const DIRTY_KEY = 'gym_dirty'          // the saved copy owes the server a change
 // An owed copy an older app (v1.3.9) left behind: its first sync stamps what it changed
 // (lib/sync-legacy.js), holding the fingerprint that app last agreed on with the server.
@@ -412,6 +417,9 @@ export const useStore = create((set, get) => {
   let importRead = null    // what importConflict last read: { uid, state, rev }
   let lastCheck = 0
   let pollTm = null
+  // AezioGym: the coach's queue is being read (pullCoachPending), and when it was last asked.
+  let coachPulling = null
+  let coachPulledAt = 0
   let offlineChanges = false   // a push failed for lack of network — the next one that lands says so
   let backupTm = null      // phone: the auto-backup after workout media changed, on its debounce
   let adoptHold = false    // a sign-in's adoption has not decided yet: no pull, no push (ADOPT_KEY)
@@ -785,7 +793,7 @@ export const useStore = create((set, get) => {
   // small GET) and fetches the document only when the number moved; a change still owed to the
   // server is pushed on the same occasion. A phone that sat in a pocket all afternoon and a
   // desktop tab left open all week used to show, and then push, whatever they last had.
-  const checkRev = async (force = false) => {
+  const checkRevCore = async (force = false) => {
     if (sandbox) return
     if (!get().user || !get().ready || document.visibilityState === 'hidden') return
     if (!force && Date.now() - lastCheck < CHECK_MIN_MS) return
@@ -808,6 +816,10 @@ export const useStore = create((set, get) => {
       if (isNetworkError(e) || refused(e)) failed(e)
       else return get().pullState()   // a server that lacks the route (older API) — the full pull knows the old protocol
     }
+  }
+  // Every check of the server's revision is also the moment to look at the coach's queue (AezioGym).
+  const checkRev = async (force = false) => {
+    try { return await checkRevCore(force) } finally { get().pullCoachPending() }
   }
   const schedulePoll = () => {
     clearTimeout(pollTm)
@@ -1937,6 +1949,44 @@ export const useStore = create((set, get) => {
         finally { if (tok === syncSession) pulling = null }
       })()
       return pulling
+    },
+
+    // AezioGym: what the coach left in Aezio for this profile (a whole plan, a tweak to some exercises, the
+    // decision on a workout logged afterwards; docs/AEZIOGYM.md). The app applies it itself as any other
+    // change (routines and workouts that sync like the rest), saves it to the server and only then
+    // acknowledges it, so the queue never loses one. Applying twice is harmless, and an item this device
+    // applied already is only acknowledged.
+    async pullCoachPending() {
+      if (!aezioBuild() || !get().user || sandbox || adoptHold || document.visibilityState === 'hidden') return
+      if (coachPulling) return coachPulling
+      if (Date.now() - coachPulledAt < CHECK_MIN_MS) return
+      coachPulledAt = Date.now()
+      const tok = currentSession()
+      coachPulling = (async () => {
+        try {
+          const { items } = await api('/api/coach-pending')
+          if (!isCurrent(tok) || !Array.isArray(items) || !items.length) return
+          let applied = []
+          try { applied = JSON.parse(localStorage.getItem(COACH_APPLIED_KEY)) || [] } catch { /* none yet */ }
+          const fresh = items.filter(i => !applied.includes(i.key))
+          let result = { plans: 0, exercises: 0, confirmed: 0, rejected: 0 }
+          if (fresh.length) {
+            get().update(S => { result = applyCoachPending(S, fresh) })
+            try { localStorage.setItem(COACH_APPLIED_KEY, JSON.stringify([...applied, ...fresh.map(i => i.key)].slice(-60))) } catch { /* storage full */ }
+          }
+          await get().pushState()
+          // Not on the server yet (offline, a conflict being settled): left in the queue for the next time.
+          if (!isCurrent(tok) || owes()) return
+          await api('/api/coach-pending/ack', { method: 'POST', body: JSON.stringify({ keys: items.map(i => i.key) }) })
+          const { useUI } = await import('./useUI.js')
+          if (result.plans) useUI.getState().toast(t('Your new plan is in the app. Pick a day for each routine.'))
+          else if (result.exercises) useUI.getState().toast(t('Your coach has adjusted some exercises in your routines.'))
+          else if (result.confirmed) useUI.getState().toast(t('Your coach confirmed the workout you logged afterwards.'))
+          else if (result.rejected) useUI.getState().toast(t('Your coach did not confirm the workout you logged afterwards.'))
+        } catch (e) { /* offline or no queue on this server: it stays waiting */ }
+        finally { coachPulling = null }
+      })()
+      return coachPulling
     },
 
     // "Sync now": what is waiting goes, the server's copy is checked, and the answer is the

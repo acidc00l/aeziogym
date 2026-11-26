@@ -99,6 +99,8 @@ const Measurements = lazyView(() => import('./views/Measurements.jsx'))
 const CoachIntake = lazyView(() => import('./views/CoachIntake.jsx'))
 const CoachSetup = lazyView(() => import('./views/CoachSetup.jsx'))
 const Assistants = lazyView(() => import('./views/Assistants.jsx'))
+// «Añadir a mi app» desde Aezio: abre /#/import/<token> (docs/AEZIOGYM.md, «Contrato Aezio ↔ AezioGym»)
+const CoachImport = lazyView(() => import('./views/CoachImport.jsx'))
 const StructuralBalance = lazyView(() => import('./views/StructuralBalance.jsx'))
 const Tools = lazyView(() => import('./views/Tools.jsx'))
 const Journal = lazyView(() => import('./views/Journal.jsx'))
@@ -274,6 +276,12 @@ function Shell() {
     if (MOBILE || !user || !ready) return
     syncPushSubscription().catch(() => {})
   }, [user?.id, ready])
+  // AezioGym: lo que el entrenador dejó en Aezio (plan, ajustes, confirmaciones) se recoge al abrir,
+  // y de nuevo con cada comprobación de sincronización (store: checkRev).
+  useEffect(() => {
+    if (!ready || !user) return
+    useStore.getState().pullCoachPending()
+  }, [user?.id, ready])
   // Opened from a device-link QR code (#95): once boot knows who is here, the sheet that redeems
   // it opens by itself — over the sign-in screen, or over the app for a guest or a signed-in
   // browser. Once per visit; closed, the code stays for the sign-in screen's own button.
@@ -403,6 +411,7 @@ function Shell() {
       {isOn(S, 'checkin') && <Route path="/checkin" element={<CheckIn />} />}
       <Route path="/plan" element={<Plan />} />
       <Route path="/plan/r/:id" element={<RoutineEdit />} />
+      <Route path="/import/:token" element={<CoachImport />} />
       <Route path="/plan/programmes" element={<Programmes />} />
       <Route path="/plan/prog/:id" element={<ProgrammeEdit />} />
       <Route path="/workout" element={<Workout />} />
