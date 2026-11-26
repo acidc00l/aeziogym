@@ -5902,4 +5902,5 @@ export default {
   "Your access has expired": "Tu acceso ha caducado",
   "Your workouts are safe on this device and will upload as soon as you sign in again.": "Tus entrenos están a salvo en este dispositivo y se subirán en cuanto vuelvas a entrar.",
   "Sign in again": "Volver a entrar",
+  "Advertisement": "Publicidad",
 }

@@ -29,3 +29,12 @@ export function ensureWebStorage(g = globalThis) {
 }
 
 ensureWebStorage()
+
+// AezioGym: PartnerAd (Home y Stats) pide la publicidad a la web de Aezio. Los tests no salen a la
+// red: esa petición recibe «sin marcas» (el test de PartnerAd pone su propio fetch).
+const realFetch = globalThis.fetch
+if (typeof realFetch === 'function') {
+  globalThis.fetch = (input, init) => String(input?.url || input).startsWith('https://aezio.website/api/partners/')
+    ? Promise.resolve(new Response(JSON.stringify({ partners: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    : realFetch(input, init)
+}

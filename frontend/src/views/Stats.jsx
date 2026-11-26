@@ -49,6 +49,7 @@ import {
 } from '../lib/effort.js'
 import { anchorsByWorkout, resolveSetRir } from '../lib/recovery.js'
 import { Button, Segmented, SelectRow, Row, MenuButton } from '../components/ui.jsx'
+import PartnerAd from '../components/PartnerAd.jsx'
 import { tappable } from '../lib/use-sheet-keyboard.js'
 import { isWarmupRow } from '../lib/workout-model.js'
 import { exView, exUnitOf, shownWeight } from '../lib/ex-unit.js'
@@ -1071,5 +1072,7 @@ export default function Stats() {
     {effortCard && <EffortCard S={S} />}
     {timeCard && <ExerciseTimeCard S={S} />}
     </section>}
+
+    <PartnerAd />
   </>
 }
