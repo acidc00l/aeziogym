@@ -15,6 +15,8 @@ export const DEF = {
   theme: 'dark', accent: 'lime', body: 'male', targetW: null,
   bodyweight: [], routines: [], week: {}, dayPlan: {},
   exWeights: {}, workouts: [], active: null, customEx: [], gifSize: 'full',
+  // Entrenos anotados después (días pasados) que esperan a que el entrenador los confirme: no cuentan hasta entonces
+  pendingWorkouts: [],
   // effort: which per-set effort scale is logged — 'none' | 'rir' | 'rpe'. null, not 'none', so
   // that a profile which never chose (loaded state is overlaid on DEF, on every path: local,
   // server pull, backup import) still falls back to the `showRir` boolean this replaced and
@@ -93,7 +95,11 @@ export const useStore = create((set, get) => {
     // Mutate a draft of S via producer fn, then persist + schedule sync.
     update(mut, push = true) {
       const S = clone(get().S)
+      const before = S.active ? JSON.stringify(S.active.entries) : null
       mut(S)
+      // Última vez que se tocó el entreno en curso (una serie, un peso): al guardar uno que se quedó
+      // sin terminar, esa es su hora de fin, no la hora en que se abre la app días después.
+      if (S.active && JSON.stringify(S.active.entries) !== before) S.active.last = Date.now()
       persist(S, push)
     },
     replaceState(S, push = false) { persist(clone(S), push) },
@@ -142,6 +148,8 @@ export const useStore = create((set, get) => {
         await api('/api/coach-pending/ack', { method: 'POST', body: JSON.stringify({ keys: items.map(i => i.key) }) })
         if (result.plans) useUI.getState().toast(t('Your new plan is in the app. Pick a day for each routine.'))
         else if (result.exercises) useUI.getState().toast(t('Your coach has adjusted some exercises in your routines.'))
+        else if (result.confirmed) useUI.getState().toast(t('Your coach confirmed the workout you logged afterwards.'))
+        else if (result.rejected) useUI.getState().toast(t('Your coach did not confirm the workout you logged afterwards.'))
       } catch (e) { /* sin conexión: sigue en espera */ }
     },
 

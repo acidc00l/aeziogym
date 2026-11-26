@@ -715,8 +715,20 @@ function DayOverride({ iso, close }) {
     close()
     toast(v === '' ? t('Back to weekly plan') : v === 'rest' ? t('{0} set to rest', fmtDate(iso)) : t('{0} planned for {1}', (st.routines.find(r => r.id === v) || {}).name, fmtDate(iso)))
   }
+  const past = iso < todayISO()
+  const pendingHere = (st.pendingWorkouts || []).filter(w => w.d === iso)
   return <>
     <h3>{fmtDate(iso, true)}</h3>
+    {pendingHere.map(w => <div key={w.id} className="small" style={{ marginBottom: 12, color: 'var(--orange)' }}>
+      <Icon name="clock" /> {t('{0} logged afterwards: waiting for your coach to confirm it.', w.name)}</div>)}
+    {st.active && !st.active.backdate && st.active.d === iso && <>
+      <Button variant="primary" onClick={() => { close(); checkUnfinishedWorkout(true) }}>{t('Save the unfinished workout')}</Button>
+      <div className="muted small" style={{ margin: '6px 0 14px' }}>{t('{0} from this day is still open in this phone.', st.active.name)}</div>
+    </>}
+    {past && !pendingHere.length && !(st.active && st.active.d === iso) && <>
+      <Button variant="primary" onClick={() => { close(); backdateSheet(iso) }}>{t('Log it as done')}</Button>
+      <div className="muted small" style={{ margin: '6px 0 14px' }}>{hasCoach(st) ? t('Trained without finishing it in the app? Log it now: it counts once your coach confirms it.') : t('Trained without finishing it in the app? Log it now.')}</div>
+    </>}
     <div className="muted small" style={{ marginBottom: 12 }}>{t('Weekly plan:')} {weeklyR ? weeklyR.name : t('Rest')}{hasOvr && <span style={{ color: 'var(--orange)' }}> · {t('changed for this day')}</span>}<br />{t('Sick, missed a day or want a different session? Pick what to train instead.')}</div>
     <div className="list">
       {st.routines.map(r => <div key={r.id} className="item" onClick={() => set(r.id)}>
@@ -729,6 +741,47 @@ function DayOverride({ iso, close }) {
   </>
 }
 export const dayOverrideSheet = iso => ui().openSheet(close => <DayOverride iso={iso} close={close} />)
+
+/* ============================ log a past workout ============================ */
+// Anotar después un entreno de un día pasado: rutina (la que tocaba ese día), hora de inicio y duración
+// (las de la última vez que se hizo esa rutina; si nunca, 19:00 y 60 min). Luego se rellena como uno normal.
+function lastTimeOf(st, routineId) {
+  const w = [...st.workouts].reverse().find(x => x.routineId === routineId && x.end > x.start)
+  if (!w) return { time: '19:00', dur: 60 }
+  const d = new Date(w.start)
+  return { time: String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'), dur: Math.max(5, Math.round((w.end - w.start) / 60000)) }
+}
+function Backdate({ iso, close }) {
+  const st = useStore(s => s.S)
+  const [rid, setRid] = useState(() => effectiveRoutineId(st, iso) || (st.routines[0] || {}).id || null)
+  const [time, setTime] = useState(() => lastTimeOf(st, rid).time)
+  const [dur, setDur] = useState(() => lastTimeOf(st, rid).dur)
+  const pick = id => { setRid(id); const l = lastTimeOf(st, id); setTime(l.time); setDur(l.dur) }
+  const start = () => {
+    const [h, m] = (time || '19:00').split(':').map(Number)
+    const at = new Date(iso + 'T00:00:00'); at.setHours(h || 0, m || 0, 0, 0)
+    close()
+    beginWorkout(rid, null, { iso, start: at.getTime(), dur: Math.max(5, Math.min(300, Number(dur) || 60)) })
+  }
+  return <>
+    <h3>{t('Log a workout for {0}', fmtDate(iso, true))}</h3>
+    <div className="muted small" style={{ marginBottom: 12 }}>{t('Sets start with what you did last time. Fix what changed, tick them and finish.')}</div>
+    <div className="list" style={{ marginBottom: 12 }}>
+      {st.routines.map(r => <div key={r.id} className="item" onClick={() => pick(r.id)}>
+        <span className="lrow-i"><Icon name={glyphOf(r.emoji)} /></span>
+        <div className="grow"><div className="tt">{r.name}</div><div className="ss">{exCount(r.ex.length)}</div></div>
+        {rid === r.id && <Icon name="check" className="accent" />}</div>)}
+    </div>
+    <div className="row" style={{ gap: 12, marginBottom: 14 }}>
+      <label className="grow small">{t('Started at')}<input type="time" className="timef" style={{ display: 'block', width: '100%', marginTop: 4 }} value={time} onChange={e => setTime(e.target.value)} /></label>
+      <label className="grow small">{t('Duration (min)')}<input type="number" inputMode="numeric" min="5" max="300" className="timef" style={{ display: 'block', width: '100%', marginTop: 4 }} value={dur} onChange={e => setDur(e.target.value)} /></label>
+    </div>
+    <Button variant="primary" disabled={!rid} onClick={start}>{t('Fill in the sets')}</Button>
+    <div style={{ height: 8 }} />
+    <Button variant="ghost" className="dim" onClick={close}>{t('Cancel')}</Button>
+  </>
+}
+export const backdateSheet = iso => ui().openSheet(close => <Backdate iso={iso} close={close} />)
 
 function DayAssign({ day, close }) {
   const st = useStore(s => s.S)
@@ -782,7 +835,8 @@ function Calendar({ start, close }) {
   for (let d = 1; d <= daysIn; d++) {
     const iso = y + '-' + String(mo + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0')
     const ws = byDay[iso], effId = effectiveRoutineId(st, iso), ovr = st.dayPlan[iso] !== undefined
-    const dotCls = ws ? 'done' : ovr && effId ? 'ovr' : effId ? 'plan' : ''
+    const pend = !ws && (st.pendingWorkouts || []).some(w => w.d === iso)
+    const dotCls = ws ? 'done' : pend ? 'ovr' : ovr && effId ? 'ovr' : effId ? 'plan' : ''
     cells.push(<button key={d} className={'cal-d' + (ws ? ' has' : '') + (iso === todayISO() ? ' today' : '')} onClick={() => {
       if (!ws) { close(); dayOverrideSheet(iso); return }
       if (ws.length === 1) { close(); workoutDetailSheet(ws[0]); return }
@@ -824,7 +878,9 @@ export function WorkoutRow({ w, onClick }) {
 export function startFlow(routineId) {
   bwSheet({ required: true, onDone: bw => beginWorkout(routineId, bw) })
 }
-export function beginWorkout(routineId, bw) {
+// `backdate` ({ iso, start, dur }): anotar después un entreno de un día pasado. Se rellena igual que uno
+// normal y al terminar se guarda con esa fecha, hora y duración.
+export function beginWorkout(routineId, bw, backdate = null) {
   const st = S()
   const r = routineId ? st.routines.find(x => x.id === routineId) : null
   // The prescription is applied as the session is built, so you walk up to the bar with the
@@ -835,7 +891,8 @@ export function beginWorkout(routineId, bw) {
     return { id: cfg.id, sg: cfg.sg, target: { ...cfg }, plan, sets: applyPrescription(buildSets(st, cfg), plan) }
   })
   update(s => {
-    s.active = { id: uid(), d: todayISO(), start: Date.now(), routineId, name: r ? r.name : t('Freestyle'), bw: bw || null, cur: 0, entries }
+    s.active = { id: uid(), d: backdate ? backdate.iso : todayISO(), start: backdate ? backdate.start : Date.now(), routineId, name: r ? r.name : t('Freestyle'), bw: bw || null, cur: 0, entries }
+    if (backdate) s.active.backdate = { dur: backdate.dur }
   })
   useUI.getState().stopRest()
   nav('/workout')
@@ -935,10 +992,15 @@ export function finishWorkout() {
   if (done < total) { confirmSheet({ title: t('Finish early?'), message: t(total - done === 1 ? '{0} set still unchecked. Finish the workout now?' : '{0} sets still unchecked. Finish the workout now?', total - done), confirmText: t('Finish workout'), onConfirm: doFinishWorkout }); return }
   doFinishWorkout()
 }
-function doFinishWorkout() {
+// Con un entrenador de Aezio (rutinas importadas), un entreno anotado después espera a que lo confirme.
+export const hasCoach = st => (st.routines || []).some(r => String(r.id).startsWith('aezio-'))
+
+// `endAt`: hora de fin de un entreno que se quedó sin terminar (la última serie apuntada).
+function doFinishWorkout(endAt = null) {
   const st = S()
   const A = st.active
   if (!A) return
+  if (A.backdate) return finishBackdated(st, A)
   const prs = []
   const e1prs = []
   A.entries.forEach(e => {
@@ -950,7 +1012,7 @@ function doFinishWorkout() {
     if (rec && !prs.includes(e.id)) e1prs.push({ id: e.id, ...rec })
   })
   const w = {
-    id: A.id, d: A.d, start: A.start, end: Date.now(), routineId: A.routineId, name: A.name, bw: A.bw,
+    id: A.id, d: A.d, start: A.start, end: endAt || Date.now(), routineId: A.routineId, name: A.name, bw: A.bw,
     // `target` (what the session prescribed) is kept alongside the sets: without it a
     // finished workout cannot say whether it hit its reps, and a timed session reads back
     // as "0 reps". It is what the progression engine works from.
@@ -969,4 +1031,60 @@ function doFinishWorkout() {
   useUI.getState().stopRest()
   beep(snd(), 880, 0.15); beep(snd(), 1100, 0.15, 0.18); beep(snd(), 1320, 0.3, 0.36)
   ui().openSheet(close => <FinishSummary w={w} prs={prs} e1prs={e1prs} close={close} />, { kind: 'center', locked: true })
+}
+
+// Entreno anotado después: misma forma que uno normal, con la fecha, hora y duración elegidas.
+// Con entrenador queda en `pendingWorkouts` (no cuenta para nada) hasta que lo confirme.
+function finishBackdated(st, A) {
+  const w = {
+    id: A.id, d: A.d, start: A.start, end: A.start + Math.max(1, A.backdate.dur || 60) * 60000, routineId: A.routineId, name: A.name, bw: A.bw,
+    entries: A.entries.map(e => ({ id: e.id, sets: e.sets, topW: e.topW || null, target: e.target || null })).filter(e => e.sets.some(s => s.done)),
+    prs: [], logged: Date.now()
+  }
+  w.vol = workoutVolume(w)
+  const pending = hasCoach(st)
+  update(s => {
+    if (pending) { s.pendingWorkouts = s.pendingWorkouts || []; s.pendingWorkouts.push({ ...w, pending: true }) }
+    else {
+      w.entries.forEach(e => {
+        const mx = Math.max(0, ...e.sets.filter(x => x.done).map(x => x.w || 0), e.topW || 0)
+        if (mx > 0) { const cur = s.exWeights[e.id]; if (!cur || mx > cur.w) s.exWeights[e.id] = { w: mx, d: w.d } }
+      })
+      s.workouts.push(w)
+    }
+    s.active = null
+  })
+  useUI.getState().stopRest()
+  nav('/home')
+  toast(pending ? t('Logged for {0}. It counts once your coach confirms it.', fmtDate(w.d)) : t('Logged for {0}.', fmtDate(w.d)))
+}
+
+/* ============================ unfinished workout ============================ */
+// Un entreno que se quedó abierto (no se pulsó ✓) solo vive en este móvil: al volver a la app se ofrece
+// guardarlo con la hora de su última serie, seguir con él o descartarlo. Una vez por apertura.
+let unfinishedAsked = null
+// Fin de un entreno que se quedó abierto: la última serie apuntada; si no consta (versiones anteriores
+// no la guardaban), la duración de la última vez que se hizo esa rutina, o 60 min. Nunca más tarde que ahora.
+function unfinishedEnd(A) {
+  if (A.last && A.last > A.start) return A.last
+  return Math.min(Date.now(), A.start + lastTimeOf(S(), A.routineId).dur * 60000)
+}
+export function checkUnfinishedWorkout(force = false) {
+  const A = S().active
+  if (!A || A.backdate || (!force && unfinishedAsked === A.id)) return
+  const idle = Date.now() - (A.last || A.start)
+  if (!force && A.d === todayISO() && idle < 3 * 3600000) return
+  unfinishedAsked = A.id
+  const done = setsDoneActive(A)
+  ui().openSheet(close => <>
+    <h3>{t('Unfinished workout')}</h3>
+    <div className="muted small" style={{ marginBottom: 14 }}>
+      {t('{0} from {1} was never finished, so it is not in your history yet.', A.name, fmtDate(A.d, true))}{' '}
+      {t(done === 1 ? '{0} set logged.' : '{0} sets logged.', done)}
+    </div>
+    {done > 0 && <><Button variant="primary" onClick={() => { close(); doFinishWorkout(unfinishedEnd(A)) }}>{t('Save it')}</Button><div style={{ height: 8 }} /></>}
+    <Button variant="ghost" onClick={() => { close(); nav('/workout') }}>{t('Keep going')}</Button>
+    <div style={{ height: 8 }} />
+    <Button variant="ghost" className="dim" onClick={() => { close(); confirmSheet({ title: t('Discard workout?'), message: t('The sets you logged in this session will be lost.'), confirmText: t('Discard'), danger: true, onConfirm: () => { update(s => { s.active = null }); useUI.getState().stopRest() } }) }}>{t('Discard')}</Button>
+  </>, { kind: 'center' })
 }

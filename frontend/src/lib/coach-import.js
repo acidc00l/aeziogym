@@ -111,15 +111,42 @@ export function applyCoachPatch(s, patch) {
 }
 
 /**
+ * El entrenador confirma (o rechaza) entrenos anotados después. Confirmado pasa al historial y cuenta
+ * como cualquier otro (también el peso máximo de cada ejercicio); rechazado desaparece.
+ */
+export function applyCoachConfirm(s, item) {
+  const out = { confirmed: 0, rejected: 0 }
+  s.pendingWorkouts = Array.isArray(s.pendingWorkouts) ? s.pendingWorkouts : []
+  for (const d of Array.isArray(item && item.decisions) ? item.decisions : []) {
+    const i = s.pendingWorkouts.findIndex(w => w.id === d.id)
+    if (i < 0) continue
+    const [w] = s.pendingWorkouts.splice(i, 1)
+    if (!d.ok) { out.rejected++; continue }
+    delete w.pending
+    w.confirmed = { by: String(item.coach || ''), at: Date.now() }
+    for (const e of w.entries || []) {
+      const mx = Math.max(0, ...e.sets.filter(x => x.done).map(x => x.w || 0), e.topW || 0)
+      const cur = s.exWeights[e.id]
+      if (mx > 0 && (!cur || mx > cur.w)) s.exWeights[e.id] = { w: mx, d: w.d }
+    }
+    if (!s.workouts.some(x => x.id === w.id)) s.workouts.push(w)
+    s.workouts.sort((a, b) => a.start - b.start)
+    out.confirmed++
+  }
+  return out
+}
+
+/**
  * Aplica lo que el entrenador dejó en espera (planes enteros o ajustes), en orden.
  * Devuelve qué se aplicó, para avisar al cliente con el mensaje que toca.
  */
 export function applyCoachPending(s, items) {
-  const result = { plans: 0, exercises: 0 }
+  const result = { plans: 0, exercises: 0, confirmed: 0, rejected: 0 }
   for (const item of Array.isArray(items) ? items : []) {
     try {
       if (item.kind === 'plan') { applyCoachPlan(s, parseCoachPlan(item.bundle)); result.plans++ }
       else if (item.kind === 'patch') result.exercises += applyCoachPatch(s, item)
+      else if (item.kind === 'confirm') { const c = applyCoachConfirm(s, item); result.confirmed += c.confirmed; result.rejected += c.rejected }
     } catch (e) { /* un envío ilegible no debe bloquear los demás */ }
   }
   return result

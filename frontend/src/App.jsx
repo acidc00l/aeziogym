@@ -7,7 +7,7 @@ import { ACCENTS } from './lib/format.js'
 import { setLang, useLang } from './lib/i18n.js'
 import { setNav } from './lib/nav.js'
 import { useWakeLock } from './lib/wakelock.js'
-import { startFlow } from './sheets.jsx'
+import { startFlow, checkUnfinishedWorkout } from './sheets.jsx'
 import Icon from './components/Icon.jsx'
 import TabBar from './components/TabBar.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
@@ -51,6 +51,14 @@ function Shell() {
   useEffect(() => { window.scrollTo(0, 0) }, [loc.pathname])
   // bound to the workout, not to the route — checking Stats mid-session keeps the screen on
   useWakeLock(!!S.active && S.keepAwake !== false)
+  // Un entreno que se quedó sin terminar: al abrir la app (o volver a ella) se ofrece guardarlo
+  useEffect(() => {
+    if (!ready) return
+    checkUnfinishedWorkout()
+    const onShow = () => { if (document.visibilityState === 'visible') checkUnfinishedWorkout() }
+    document.addEventListener('visibilitychange', onShow)
+    return () => document.removeEventListener('visibilitychange', onShow)
+  }, [ready])
 
   const authed = user || isGuest
   if (!ready && !authed) return (

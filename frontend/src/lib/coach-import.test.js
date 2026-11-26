@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseCoachPlan, coachPlanChanges, applyCoachPlan, coachNextRoutine, applyCoachPatch, applyCoachPending } from './coach-import.js'
+import { parseCoachPlan, coachPlanChanges, applyCoachPlan, coachNextRoutine, applyCoachPatch, applyCoachPending, applyCoachConfirm } from './coach-import.js'
 import { EXDB } from './exercises.js'
 
 const lift = EXDB.find(e => e.bp !== 'cardio').id
@@ -105,7 +105,7 @@ describe('coach changes sent straight to the app', () => {
     const S = withPlan(36)
     S.week[2] = 'aezio-36-0'
     const result = applyCoachPending(S, [{ kind: 'plan', bundle: bundle(82, [0, 1, 2]) }])
-    expect(result).toEqual({ plans: 1, exercises: 0 })
+    expect(result).toEqual({ plans: 1, exercises: 0, confirmed: 0, rejected: 0 })
     expect(S.routines.map(r => r.id)).toEqual(['mine', 'aezio-82-0', 'aezio-82-1', 'aezio-82-2'])
     expect(S.week).toEqual({ 1: 'mine' })
     expect(S.workouts).toEqual([{ id: 'w1' }])
@@ -132,6 +132,38 @@ describe('coach changes sent straight to the app', () => {
   it('skips an unreadable item without blocking the rest', () => {
     const S = withPlan(82)
     const result = applyCoachPending(S, [{ kind: 'plan', bundle: { nope: 1 } }, { kind: 'patch', changes: [{ routine: 'aezio-82-1', id: lift, sets: 5, reps: 5 }] }])
-    expect(result).toEqual({ plans: 0, exercises: 1 })
+    expect(result).toEqual({ plans: 0, exercises: 1, confirmed: 0, rejected: 0 })
+  })
+})
+
+describe('applyCoachConfirm (entrenos anotados después)', () => {
+  const base = () => ({
+    exWeights: { a: { w: 100, d: '2026-11-13' } },
+    workouts: [{ id: 'w1', d: '2026-11-19', start: 1, end: 2, entries: [] }],
+    pendingWorkouts: [
+      { id: 'p1', d: '2026-11-20', start: 5, end: 6, pending: true, entries: [{ id: 'a', sets: [{ w: 110, r: 5, done: true }], topW: null }] },
+      { id: 'p2', d: '2026-11-18', start: 3, end: 4, pending: true, entries: [] },
+    ],
+  })
+  it('confirmado pasa al historial, en orden, y sube el peso máximo', () => {
+    const s = base()
+    const out = applyCoachConfirm(s, { kind: 'confirm', coach: 'Marc', decisions: [{ id: 'p1', ok: true }] })
+    expect(out).toEqual({ confirmed: 1, rejected: 0 })
+    expect(s.pendingWorkouts.map(w => w.id)).toEqual(['p2'])
+    expect(s.workouts.map(w => w.id)).toEqual(['w1', 'p1'])
+    expect(s.workouts[1].pending).toBeUndefined()
+    expect(s.workouts[1].confirmed.by).toBe('Marc')
+    expect(s.exWeights.a).toEqual({ w: 110, d: '2026-11-20' })
+  })
+  it('rechazado desaparece sin tocar el historial', () => {
+    const s = base()
+    expect(applyCoachConfirm(s, { decisions: [{ id: 'p2', ok: false }] })).toEqual({ confirmed: 0, rejected: 1 })
+    expect(s.pendingWorkouts.map(w => w.id)).toEqual(['p1'])
+    expect(s.workouts.map(w => w.id)).toEqual(['w1'])
+  })
+  it('ignora decisiones de entrenos que ya no están pendientes', () => {
+    const s = base()
+    expect(applyCoachConfirm(s, { decisions: [{ id: 'nope', ok: true }] })).toEqual({ confirmed: 0, rejected: 0 })
+    expect(applyCoachPending(s, [{ kind: 'confirm', decisions: [{ id: 'p2', ok: true }] }]).confirmed).toBe(1)
   })
 })

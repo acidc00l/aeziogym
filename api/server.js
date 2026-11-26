@@ -449,10 +449,11 @@ const routes = {
     if (!validInternalSignature('coach-pending', body.id, body.ts, body.sig)) return json(res, 403, { error: 'forbidden' });
     if (!db.users.some(u => u.id === body.id)) return json(res, 404, { error: 'no such profile' });
     const item = body.item;
-    if (!item || typeof item !== 'object' || !['plan', 'patch'].includes(item.kind)) return json(res, 400, { error: 'bad item' });
+    if (!item || typeof item !== 'object' || !['plan', 'patch', 'confirm'].includes(item.kind)) return json(res, 400, { error: 'bad item' });
     let items = readPending(body.id);
     // A newer plan makes any older plan (and the tweaks meant for it) pointless.
-    if (item.kind === 'plan') items = [];
+    // (las confirmaciones de entrenos anotados no dependen del plan: se quedan)
+    if (item.kind === 'plan') items = items.filter(i => i.kind === 'confirm');
     items.push({ ...item, key: crypto.randomBytes(8).toString('hex'), at: Date.now() });
     atomicWrite(pendingFile(body.id), JSON.stringify(items.slice(-20)));
     json(res, 200, { ok: true, pending: items.length });
