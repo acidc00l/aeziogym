@@ -24,8 +24,16 @@ services:
       # X-Forwarded-For / X-Real-IP with the real peer — so the sign-in throttle may count
       # requests by those headers instead of lumping everyone in as "the web container".
       - TRUST_PROXY=${TRUST_PROXY:-1}
+      # AezioGym: funciones de openGym apagadas por defecto (docs/AEZIOGYM.md). Cada una se puede
+      # reactivar con su variable; el interfaz las oculta además por su cuenta.
+      - COACH_DISABLED=${COACH_DISABLED:-1}   # sin Coach de IA
+      - LIBRARY=${LIBRARY:-off}               # sin Comunidad
+      - SHARING=${SHARING:-off}
+      - INTEGRATIONS=${INTEGRATIONS:-}        # sin webhooks ni Strava
+      - API_TOKENS=${API_TOKENS:-off}         # sin tokens de API (ni MCP ni calendario)
+      - OIDC_ISSUER=${OIDC_ISSUER:-}          # sin inicio de sesión OIDC
     volumes:
-      - ./data:/data         # users, passkeys, per-user state, session secret — BACK THIS UP
+      - ./data:/data        # users, passkeys, per-user state, session secret — BACK THIS UP
                              # (and uploads/: the photos and videos of custom exercises)
       # Provider credential cache (Codex). A sibling of ./data on purpose: the documented backup
       # is `tar czf … data/`, and a live refresh token must not end up inside it. Nothing here
