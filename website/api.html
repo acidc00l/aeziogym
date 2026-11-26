@@ -276,6 +276,9 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
     <a class="side-link" href="#shared"><b>Community</b></a>
   </div>
   <div class="side-group">
+    <a class="side-link" href="#aezio"><b>Aezio</b></a>
+  </div>
+  <div class="side-group">
     <a class="side-link" href="#admin"><b>Admin</b></a>
   </div>
   <div class="side-group">
@@ -310,6 +313,7 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
   <div class="ref-toc-group"><a class="ref-toc-a" href="#mcp">MCP connector</a></div>
   <div class="ref-toc-group"><a class="ref-toc-a" href="#trainers">Trainers</a></div>
   <div class="ref-toc-group"><a class="ref-toc-a" href="#shared">Community</a></div>
+  <div class="ref-toc-group"><a class="ref-toc-a" href="#aezio">Aezio</a></div>
   <div class="ref-toc-group"><a class="ref-toc-a" href="#admin">Admin</a></div>
   <div class="ref-toc-group"><a class="ref-toc-a" href="#schemas">Schemas</a></div>
 </nav>
@@ -328,7 +332,7 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
   <p class="api-facts">
     <span>OpenAPI 3.1.0</span>
     <span>openGym v1.4.5</span>
-    <span>177 endpoints</span>
+    <span>182 endpoints</span>
     <span>AGPL-3.0-or-later</span>
   </p>
 
@@ -6244,6 +6248,165 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
   </div>
 </section>
 
+<section class="api-sec" id="aezio">
+  <h2>Aezio</h2>
+  <p class="sub">AezioGym: what Aezio's web and the app exchange (docs/AEZIOGYM.md, «Contrato Aezio ↔ AezioGym»). The three <code>/api/internal/*</code> routes are called by Aezio's web over the internal docker address, never by a browser; they carry no session, and the signature in the body is the credential.</p>
+  <div class="eps">
+
+<details class="ep" id="op-internalDeleteProfile">
+  <summary>
+    <span class="m post">POST</span>
+    <span class="ep-path"><code>/api/internal/delete-profile</code><span class="ep-chip public">public</span></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">Aezio asks the app to delete a profile</span>
+  </summary>
+  <div class="ep-body">
+<p>Called by Aezio's web when its client erases their account. Removes everything of the profile (the same clean-up as the admin's delete). A profile that is not here answers 200 with <code>result: missing</code>. Admin profiles are refused with 403 (<code>admin profiles cannot be deleted here</code>).</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Public: no authentication required.</span></p>
+
+<p class="ep-h">Request body <span class="p-hint">(JSON)</span></p>
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">200</span>
+    <span class="p-desc"><code>{ ok: true, result: &quot;deleted&quot; | &quot;missing&quot; }</code>.<span class="r-sig">object</span></span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">403</span>
+    <span class="p-desc"><code>forbidden</code>: signature wrong, outside the minute, or no profile id.</span>
+  </div>
+    </div>
+  </div>
+</details>
+
+<details class="ep" id="op-internalRestoreProfile">
+  <summary>
+    <span class="m post">POST</span>
+    <span class="ep-path"><code>/api/internal/restore-profile</code><span class="ep-chip public">public</span></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">Aezio gives back a profile it had deleted</span>
+  </summary>
+  <div class="ep-body">
+<p>Called by Aezio's web when its client recovers the account within the month. Carries what the web saved of the profile: <code>user</code>, <code>creds</code>, <code>subs</code> and <code>state</code>.</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Public: no authentication required.</span></p>
+
+<p class="ep-h">Request body <span class="p-hint">(JSON)</span></p>
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">200</span>
+    <span class="p-desc"><code>{ ok: true }</code>.<span class="r-sig">object</span></span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">400</span>
+    <span class="p-desc"><code>bad profile</code>: <code>user.id</code> is not the signed id.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">403</span>
+    <span class="p-desc"><code>forbidden</code>: signature wrong, outside the minute, or no profile id.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">409</span>
+    <span class="p-desc"><code>already exists</code>: the profile is already here.</span>
+  </div>
+    </div>
+  </div>
+</details>
+
+<details class="ep" id="op-internalCoachPending">
+  <summary>
+    <span class="m post">POST</span>
+    <span class="ep-path"><code>/api/internal/coach-pending</code><span class="ep-chip public">public</span></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">Aezio leaves a coach change for the app</span>
+  </summary>
+  <div class="ep-body">
+<p>Called by Aezio's web. <code>item.kind</code> is <code>plan</code> (<code>plan_id</code>, <code>bundle</code>), <code>patch</code> (<code>plan_id</code>, <code>coach</code>, <code>changes</code>) or <code>confirm</code> (<code>coach</code>, <code>decisions</code>). It is kept in <code>pending-&lt;id&gt;.json</code> (20 at most) until the app acknowledges it. A new plan drops the older plans and patches, not the confirmations.</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Public: no authentication required.</span></p>
+
+<p class="ep-h">Request body <span class="p-hint">(JSON)</span></p>
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">200</span>
+    <span class="p-desc"><code>{ ok: true, pending }</code>, how many are waiting.<span class="r-sig">object</span></span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">400</span>
+    <span class="p-desc"><code>bad item</code>.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">403</span>
+    <span class="p-desc"><code>forbidden</code>: signature wrong, outside the minute, or no profile id.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">404</span>
+    <span class="p-desc"><code>no such profile</code>.</span>
+  </div>
+    </div>
+  </div>
+</details>
+
+<details class="ep" id="op-coachPending">
+  <summary>
+    <span class="m get">GET</span>
+    <span class="ep-path"><code>/api/coach-pending</code></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">What the coach left for this app</span>
+  </summary>
+  <div class="ep-body">
+<p>The items Aezio queued for the signed-in profile and the app has not acknowledged yet.</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
+
+
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">200</span>
+    <span class="p-desc">The queue, oldest first.<span class="r-sig">{ items: object[] }</span></span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">401</span>
+    <span class="p-desc">No session, expired/revoked session, or a disabled account.<span class="r-sig"><code>{&quot;error&quot;:&quot;not signed in&quot;}</code></span></span>
+  </div>
+    </div>
+  </div>
+</details>
+
+<details class="ep" id="op-coachPendingAck">
+  <summary>
+    <span class="m post">POST</span>
+    <span class="ep-path"><code>/api/coach-pending/ack</code></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">Acknowledge coach items the app applied and saved</span>
+  </summary>
+  <div class="ep-body">
+
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
+
+<p class="ep-h">Request body <span class="p-hint">(JSON)</span></p><div class="ptab">
+  <div class="prow">
+    <span class="p-name">keys</span>
+    <span class="p-type">string[]</span>
+    <span class="p-desc"></span>
+  </div>
+</div>
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">200</span>
+    <span class="p-desc"><code>{ ok: true, pending }</code>, how many are still waiting.<span class="r-sig">object</span></span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">401</span>
+    <span class="p-desc">No session, expired/revoked session, or a disabled account.<span class="r-sig"><code>{&quot;error&quot;:&quot;not signed in&quot;}</code></span></span>
+  </div>
+    </div>
+  </div>
+</details>
+  </div>
+</section>
+
 <section class="api-sec" id="admin">
   <h2>Admin</h2>
   <p class="sub">Admin dashboard. Requires an admin session (<code>ADMIN_UIDS</code> or <code>admin:true</code>)</p>
@@ -7919,6 +8082,34 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
     <span class="p-name">deleteBlocked</span>
     <span class="p-type">&quot;last-admin&quot;</span>
     <span class="p-desc">Present when deleting this profile (<code>POST /api/account/delete</code>) would be refused before any proof is checked: <code>last-admin</code>, the only admin while other profiles remain. The delete sheet says so before asking for a passkey or the password; the delete itself still checks.</span>
+  </div>
+</div>
+  </div>
+</details>
+
+<details class="ep sch" id="schema-AezioSigned">
+  <summary>
+    <span class="sch-name"><code>AezioSigned</code></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum"></span>
+  </summary>
+  <div class="ep-body">
+
+<div class="ptab">
+  <div class="prow">
+    <span class="p-name">id<em class="p-req" title="required">required</em></span>
+    <span class="p-type">string</span>
+    <span class="p-desc">The profile id.</span>
+  </div>
+  <div class="prow">
+    <span class="p-name">ts<em class="p-req" title="required">required</em></span>
+    <span class="p-type">string</span>
+    <span class="p-desc">Milliseconds since the epoch, as text. Valid for one minute either side of the server clock.</span>
+  </div>
+  <div class="prow">
+    <span class="p-name">sig<em class="p-req" title="required">required</em></span>
+    <span class="p-type">string</span>
+    <span class="p-desc">Hex HMAC-SHA256 of <code>&lt;action&gt;:&lt;id&gt;:&lt;ts&gt;</code> with this instance's <code>data/secret</code>.</span>
   </div>
 </div>
   </div>

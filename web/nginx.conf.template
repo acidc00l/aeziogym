@@ -13,6 +13,20 @@ map $request_uri $api_request_uri {
     "~^\Q${BASE_PATH}\E(?<api_request_rest>/.*)$" $api_request_rest;
 }
 
+# AezioGym: /api/internal/ is for Aezio's web, which calls it by this container's own docker name
+# (http://opengym-web/api/internal/...), signed. Anyone arriving by the public address carries
+# another Host, so it is answered 404 here before it reaches the API. INTERNAL_HOST is a regular
+# expression for the host that may use it; the default `.*` (any) keeps openGym's behaviour, and
+# docker-compose.yml sets it to opengym-web. The signature stays what protects the routes.
+map $host $api_host_internal {
+    default 0;
+    "~^(${INTERNAL_HOST})$" 1;
+}
+map "$api_host_internal:$request_uri" $api_internal_refused {
+    default 0;
+    "~^0:\Q${BASE_PATH}\E/api/internal(/|\?|$)" 1;
+}
+
 server {
     listen ${NGINX_PORT};
     # No nginx version in the Server header or on its own error pages.
@@ -42,6 +56,7 @@ server {
     # as /api/anything.json would be matched by the \.(js|css|json|html)$ block instead and be
     # looked for on disk rather than proxied.
     location ^~ ${BASE_PATH}/api/ {
+        if ($api_internal_refused) { return 404; }
         # Match the API's own body limit (MAX_BODY in api/server.js): the whole workout history
         # travels in one PUT /api/data, and nginx's 1 MiB default would answer 413 here before the
         # API ever saw it — a sync that silently stops once the history grows past 1 MiB.

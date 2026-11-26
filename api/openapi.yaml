@@ -215,6 +215,11 @@ tags:
       Settings → Integrations: outbound webhooks now, more providers later. Off unless the
       server runs with `INTEGRATIONS` (e.g. `INTEGRATIONS=webhook`); then a profile can add
       its own connections. Secrets are sealed at rest and shown once. See docs/INTEGRATIONS.md.
+  - name: aezio
+    description: >-
+      AezioGym: what Aezio's web and the app exchange (docs/AEZIOGYM.md, «Contrato Aezio ↔ AezioGym»).
+      The three `/api/internal/*` routes are called by Aezio's web over the internal docker
+      address, never by a browser; they carry no session, and the signature in the body is the credential.
 
 security:
   - cookieAuth: []
@@ -874,6 +879,156 @@ paths:
               schema: { $ref: '#/components/schemas/Error' }
               example: { error: "the last admin cannot leave while other profiles remain", code: "last-admin" }
         '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /api/internal/delete-profile:
+    post:
+      tags: [aezio]
+      operationId: internalDeleteProfile
+      summary: Aezio asks the app to delete a profile
+      security: []
+      description: |
+        Called by Aezio's web when its client erases their account. Removes everything of the profile
+        (the same clean-up as the admin's delete). A profile that is not here answers 200 with
+        `result: missing`. Admin profiles are refused with 403 (`admin profiles cannot be deleted here`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/AezioSigned'
+
+      responses:
+        '200':
+          description: '`{ ok: true, result: "deleted" | "missing" }`.'
+          content:
+            application/json:
+              schema: { type: object }
+        '403':
+          description: '`forbidden`: signature wrong, outside the minute, or no profile id.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/internal/restore-profile:
+    post:
+      tags: [aezio]
+      operationId: internalRestoreProfile
+      summary: Aezio gives back a profile it had deleted
+      security: []
+      description: |
+        Called by Aezio's web when its client recovers the account within the month. Carries what
+        the web saved of the profile: `user`, `creds`, `subs` and `state`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/AezioSigned'
+                - type: object
+                  required: [user]
+                  properties:
+                    user: { type: object, description: 'The user record; its `id` must be the signed one.' }
+                    creds: { type: array, items: { type: object } }
+                    subs: { type: array, items: { type: object } }
+                    state: { type: object, description: 'The profile document, written back as it is.' }
+      responses:
+        '200':
+          description: '`{ ok: true }`.'
+          content:
+            application/json:
+              schema: { type: object }
+        '400':
+          description: '`bad profile`: `user.id` is not the signed id.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '409':
+          description: '`already exists`: the profile is already here.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '403':
+          description: '`forbidden`: signature wrong, outside the minute, or no profile id.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/internal/coach-pending:
+    post:
+      tags: [aezio]
+      operationId: internalCoachPending
+      summary: Aezio leaves a coach change for the app
+      security: []
+      description: |
+        Called by Aezio's web. `item.kind` is `plan` (`plan_id`, `bundle`), `patch` (`plan_id`, `coach`,
+        `changes`) or `confirm` (`coach`, `decisions`). It is kept in `pending-<id>.json` (20 at most)
+        until the app acknowledges it. A new plan drops the older plans and patches, not the confirmations.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/AezioSigned'
+                - type: object
+                  required: [item]
+                  properties:
+                    item: { type: object, required: [kind], properties: { kind: { type: string, enum: [plan, patch, confirm] } } }
+      responses:
+        '200':
+          description: '`{ ok: true, pending }`, how many are waiting.'
+          content:
+            application/json:
+              schema: { type: object }
+        '400':
+          description: '`bad item`.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: '`no such profile`.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '403':
+          description: '`forbidden`: signature wrong, outside the minute, or no profile id.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/coach-pending:
+    get:
+      tags: [aezio]
+      operationId: coachPending
+      summary: What the coach left for this app
+      description: The items Aezio queued for the signed-in profile and the app has not acknowledged yet.
+      responses:
+        '200':
+          description: The queue, oldest first.
+          content:
+            application/json:
+              schema: { type: object, properties: { items: { type: array, items: { type: object } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/coach-pending/ack:
+    post:
+      tags: [aezio]
+      operationId: coachPendingAck
+      summary: Acknowledge coach items the app applied and saved
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { keys: { type: array, items: { type: string } } } }
+      responses:
+        '200':
+          description: '`{ ok: true, pending }`, how many are still waiting.'
+          content:
+            application/json:
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Unauthorized' }
 
   /api/pair/create:
     post:
@@ -6322,6 +6477,14 @@ components:
         passkeys: [{ id: "g3Xq…", name: "Laptop", created: "2026-09-23T10:00:00.000Z", lastUsed: "2026-09-23T10:00:00.000Z", transports: [internal] }]
         password: false
         lastWayIn: true
+
+    AezioSigned:
+      type: object
+      required: [id, ts, sig]
+      properties:
+        id: { type: string, description: The profile id. }
+        ts: { type: string, description: 'Milliseconds since the epoch, as text. Valid for one minute either side of the server clock.' }
+        sig: { type: string, description: 'Hex HMAC-SHA256 of `<action>:<id>:<ts>` with this instance''s `data/secret`.' }
 
     OwnerProof:
       type: object

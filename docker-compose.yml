@@ -33,6 +33,8 @@ services:
       - API_TOKENS=${API_TOKENS:-off}         # sin tokens de API (ni MCP ni calendario)
       - OIDC_ISSUER=${OIDC_ISSUER:-}          # sin inicio de sesión OIDC
       - DEFAULT_LANG=${DEFAULT_LANG:-es}      # idioma de quien aún no ha elegido uno
+      # Aezio lee la clave y db.json de esta carpeta: no se cierran a 0600 (docs/AEZIOGYM.md, contrato)
+      - SHARED_DATA=${SHARED_DATA:-1}
     volumes:
       - ./data:/data        # users, passkeys, per-user state, session secret — BACK THIS UP
                              # (and uploads/: the photos and videos of custom exercises)
@@ -71,6 +73,9 @@ services:
       # slash). Empty serves the app at the site root, which is what it has always done; a proxy
       # that strips the prefix needs nothing set (docs/SELF_HOSTING.md §5).
       - BASE_PATH=${BASE_PATH:-}
+      # AezioGym: /api/internal/ solo para la web de Aezio, que llama por el nombre del contenedor
+      # (http://opengym-web/...). Por la URL pública, otro Host, da 404 (docs/AEZIOGYM.md).
+      - INTERNAL_HOST=${INTERNAL_HOST:-opengym-web}
       # The largest photo or video upload nginx passes to the API. Keep it above
       # MEDIA_VIDEO_MAX_MB (100 by default), which the api service reads from .env.
       - MEDIA_UPLOAD_MAX=${MEDIA_UPLOAD_MAX:-112m}

@@ -154,7 +154,11 @@ fs.mkdirSync(DATA, { recursive: true });
  * reason to refuse to boot. The privilege drop in adapters/spawn.js is the control that does
  * fail closed. */
 const lock = f => { try { fs.chmodSync(path.join(DATA, f), 0o600); } catch { /* not present yet, or host says no */ } };
-['secret', 'db.json', 'coach.json'].forEach(lock);
+// AezioGym: Aezio's web reads the signing key and db.json straight from this folder (docs/AEZIOGYM.md,
+// «Contrato Aezio ↔ AezioGym»). With SHARED_DATA=1 neither is closed to 0600 here: the host owner sets
+// the key to 640 root:www-data, and db.json is written 0644 like the state files.
+const SHARED_DATA = /^(1|true|on|yes)$/i.test(process.env.SHARED_DATA || '');
+(SHARED_DATA ? ['coach.json'] : ['secret', 'db.json', 'coach.json']).forEach(lock);
 
 /* ---------- secret + db ---------- */
 const secretFile = path.join(DATA, 'secret');
@@ -231,8 +235,9 @@ const codeGuard = createCodeGuard();
 // A write cut short leaves the previous db.json.bak whole (temporary file and rename).
 function saveDb() {
   const text = JSON.stringify(db, null, 2);
-  atomicWrite(dbFile, text, 0o600);
-  try { atomicWrite(dbFile + '.bak', text, 0o600); }
+  const mode = SHARED_DATA ? 0o644 : 0o600;
+  atomicWrite(dbFile, text, mode);
+  try { atomicWrite(dbFile + '.bak', text, mode); }
   catch (e) { console.error('db.json.bak could not be written', e.message); }
 }
 // Flushed before and after the rename (durable.js): a host reset must not bring back the file
@@ -242,6 +247,26 @@ function atomicWrite(file, content, mode) { durableWrite(file, content, mode); }
 // synced more writes ago than this merges on its next pull instead of taking the server's copy.
 const WID_KEEP = 50;
 const stateFile = uid => path.join(DATA, 'state-' + uid.replace(/[^a-zA-Z0-9_-]/g, '') + '.json');
+// What the coach left in Aezio for a profile's app to pick up (plans, tweaks, confirmations): a
+// list in pending-<id>.json, read by the web too (docs/AEZIOGYM.md). The app applies it itself
+// and then acknowledges; writing it into the state file from outside would be overwritten by the
+// next push from the phone.
+const pendingFile = uid => path.join(DATA, 'pending-' + uid.replace(/[^a-zA-Z0-9_-]/g, '') + '.json');
+const PENDING_KINDS = ['plan', 'patch', 'confirm'];
+const PENDING_MAX = 20;
+function readPending(uid) {
+  try { const items = JSON.parse(fs.readFileSync(pendingFile(uid), 'utf8')); return Array.isArray(items) ? items : []; } catch { return []; }
+}
+// Aezio's signed calls (POST /api/internal/<action>): the web signs `action:id:ts` with this
+// instance's secret, ts in milliseconds, valid for a minute. Same contract as AezioGym 1.2.4.
+const INTERNAL_WINDOW_MS = 60 * 1000;
+function validInternalSignature(action, uid, ts, sig) {
+  if (typeof uid !== 'string' || !uid || typeof sig !== 'string' || !/^[0-9a-f]{64}$/i.test(sig)) return false;
+  const when = Number(ts);
+  if (!Number.isFinite(when) || Math.abs(Date.now() - when) > INTERNAL_WINDOW_MS) return false;
+  const expected = crypto.createHmac('sha256', SECRET).update(action + ':' + uid + ':' + ts).digest();
+  return crypto.timingSafeEqual(Buffer.from(sig, 'hex'), expected);
+}
 // The watch relay's mailbox of a profile (watch-relay.js): the page's last snapshot and what its
 // Zepp OS watches sent. Small, rewritten whole like the state file.
 const watchFile = uid => path.join(DATA, 'watch-' + uid.replace(/[^a-zA-Z0-9_-]/g, '') + '.json');
@@ -1590,6 +1615,7 @@ function removeAccount(u) {
   // The training history and any Coach credential of theirs, both outside db.json.
   try { fs.unlinkSync(stateFile(u.id)); } catch { /* already gone */ }
   try { fs.unlinkSync(watchFile(u.id)); } catch { /* never had a watch */ }
+  try { fs.unlinkSync(pendingFile(u.id)); } catch { /* nothing waiting from the coach */ }
   try { coachConfig.clearProfileAuth(u.id); } catch { /* nothing stored */ }
   // The Coach's own record of them: plans waiting for a yes, the job history, the cohort switch.
   try { coachJobs.removeUser(u.id); } catch (e) { console.error('coach: could not remove the record of', u.id, e.message); }
@@ -2826,6 +2852,82 @@ const routes = {
     removeAccount(user);
     audit(req, 'auth.account.delete', { user, msg: proof });
     json(res, 200, { ok: true }, { 'Set-Cookie': clearCookie });
+  },
+
+  // ---- Aezio ↔ AezioGym (docs/AEZIOGYM.md, «Contrato Aezio ↔ AezioGym») ----
+  // Aezio's web calls these by the internal docker address, signed with this instance's secret
+  // (validInternalSignature). No session: the signature is the credential, so they are exempt
+  // from the browser origin check like any request that carries no cookie (csrfOk lets a call with
+  // no Origin and no Sec-Fetch-Site through). nginx only offers them to the internal host.
+
+  // Aezio asks for a deletion when its client erases their account. Everything of the profile goes
+  // (removeAccount, the same clean-up as the admin's delete). Admins are refused, as in 1.2.4: the
+  // instance must not lose its way in, so the last-admin rule is covered with them.
+  'POST /api/internal/delete-profile': async (req, res) => {
+    const body = await readBody(req);
+    if (!validInternalSignature('delete-profile', body.id, body.ts, body.sig)) return json(res, 403, { error: 'forbidden' });
+    const user = db.users.find(u => u.id === body.id);
+    if (!user) return json(res, 200, { ok: true, result: 'missing' });
+    if (isAdmin(user)) return json(res, 403, { error: 'admin profiles cannot be deleted here' });
+    // Invites keep existing for the admin's records, but no longer say who used them.
+    (db.invites || []).forEach(i => { if (i.usedBy === user.id) i.usedBy = 'deleted'; });
+    removeAccount(user);
+    console.log('aezio: profile deleted at the web\'s request', user.id);
+    json(res, 200, { ok: true, result: 'deleted' });
+  },
+
+  // Aezio returns a profile it had deleted, when its client recovers the account within the month.
+  'POST /api/internal/restore-profile': async (req, res) => {
+    const body = await readBody(req);
+    if (!validInternalSignature('restore-profile', body.id, body.ts, body.sig)) return json(res, 403, { error: 'forbidden' });
+    if (!body.user || typeof body.user !== 'object' || body.user.id !== body.id) return json(res, 400, { error: 'bad profile' });
+    if (db.users.some(u => u.id === body.id)) return json(res, 409, { error: 'already exists' });
+    // A restored profile is never an admin by itself: roles come from this instance, not from a request.
+    const user = { ...body.user };
+    db.users.push(user);
+    db.creds = db.creds || [];
+    db.subs = db.subs || [];
+    db.creds.push(...(Array.isArray(body.creds) ? body.creds.filter(c => c && c.userId === body.id) : []));
+    db.subs.push(...(Array.isArray(body.subs) ? body.subs.filter(x => x && x.userId === body.id) : []));
+    saveDb();
+    if (body.state && typeof body.state === 'object' && !Array.isArray(body.state)) atomicWrite(stateFile(body.id), JSON.stringify(body.state));
+    console.log('aezio: profile restored at the web\'s request', user.id);
+    json(res, 200, { ok: true });
+  },
+
+  // Aezio leaves a coach's change here (a whole plan, a tweak to some exercises, or the decision on
+  // a workout logged afterwards). The app picks it up the next time it opens and applies it itself.
+  'POST /api/internal/coach-pending': async (req, res) => {
+    const body = await readBody(req);
+    if (!validInternalSignature('coach-pending', body.id, body.ts, body.sig)) return json(res, 403, { error: 'forbidden' });
+    if (!db.users.some(u => u.id === body.id)) return json(res, 404, { error: 'no such profile' });
+    const item = body.item;
+    if (!item || typeof item !== 'object' || !PENDING_KINDS.includes(item.kind)) return json(res, 400, { error: 'bad item' });
+    let items = readPending(body.id);
+    // A newer plan makes any older plan (and the tweaks meant for it) pointless; the confirmations
+    // of workouts logged afterwards do not depend on the plan and stay.
+    if (item.kind === 'plan') items = items.filter(i => i.kind === 'confirm');
+    items.push({ ...item, key: crypto.randomBytes(8).toString('hex'), at: Date.now() });
+    atomicWrite(pendingFile(body.id), JSON.stringify(items.slice(-PENDING_MAX)));
+    json(res, 200, { ok: true, pending: Math.min(items.length, PENDING_MAX) });
+  },
+
+  // What the signed-in app has waiting, and its acknowledgement once it applied and saved it.
+  'GET /api/coach-pending': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    json(res, 200, { items: readPending(user.id) });
+  },
+
+  'POST /api/coach-pending/ack': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    const body = await readBody(req);
+    const keys = Array.isArray(body.keys) ? body.keys.map(String) : [];
+    const left = readPending(user.id).filter(i => !keys.includes(i.key));
+    if (left.length) atomicWrite(pendingFile(user.id), JSON.stringify(left));
+    else { try { fs.unlinkSync(pendingFile(user.id)); } catch { /* nothing pending */ } }
+    json(res, 200, { ok: true, pending: left.length });
   },
 
   // Mobile app pairing: called from an already signed-in browser tab (Settings → "Pair the

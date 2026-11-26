@@ -148,6 +148,7 @@ const TAGS = {
   mcp: { title: 'MCP connector', side: 'OAuth sign-in for Claude &amp; ChatGPT (MCP)' },
   trainers: { title: 'Trainers', side: 'Studios, sharing &amp; consent (TRAINERS)' },
   shared: { title: 'Community', side: 'The shared library (LIBRARY)' },
+  aezio: { title: 'Aezio', side: 'Web de Aezio y app (AezioGym)' },
   admin: { title: 'Admin', side: 'Users, invites, audit log, Coach' }
 }
 

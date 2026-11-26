@@ -50,6 +50,66 @@ Los medios de Gym visual no están en el repositorio (`catalogue/media/*` se ign
   los del catálogo en el idioma es; el resto de ejercicios conserva el nombre de la 1.4.5. En es no se
   muestran las descripciones en inglés de esos ejercicios.
 
+## Contrato Aezio ↔ AezioGym
+
+La web de Aezio (`core/Services/OpenGymService.php`, `PlanAppController.php`, `WorkoutConfirm.php`)
+habla con la app. Este contrato es el de AezioGym 1.2.4 y no se cambia: la web no se toca para el
+cambio de versión.
+
+### Llamadas de la web a la app (internas, firmadas)
+
+- **Dirección**: `http://opengym-web/api/internal/<acción>` por la red interna de docker (nombre del
+  contenedor web, puerto 80), no por la URL pública. Pasa por el nginx de `web`, que reenvía `/api/` a la app.
+- **Método y cuerpo**: `POST`, `Content-Type: application/json`, sin cabeceras de firma. Todo va en el cuerpo:
+  `{"id": "<id del perfil>", "ts": "<milisegundos Unix, como texto>", "sig": "<hex>", ...extra}`.
+- **Firma**: `sig = HMAC-SHA256(clave, "<acción>:<id>:<ts>")` en hexadecimal minúscula. No firma el cuerpo
+  extra: lo que protege es la acción, el perfil y el momento.
+- **Ventana**: la app rechaza si `|ahora − ts| > 60 s` (los relojes de la web y de la app deben coincidir).
+- **Clave**: el archivo `data/secret` de la app (la misma con la que ella firma las sesiones). La web lo
+  lee de la carpeta de datos compartida (`/home/r0ot/docker/opengym/data/`, permisos 640 `root:www-data`).
+  Si no lo puede leer, la web no firma y avisa por Telegram.
+- **Éxito**: HTTP 200. Cualquier otro código (o sin respuesta) cuenta como fallo: la web lo registra, avisa
+  como mucho una vez por hora y reintenta a diario los borrados.
+- **Rechazo**: firma mala, fuera de ventana o `id` vacío → `403 {"error":"forbidden"}`.
+
+| Acción | Cuerpo extra | Respuestas |
+|---|---|---|
+| `delete-profile` | — | 200 `{ok:true,result:"deleted"}` o `"missing"`; 403 `forbidden` (firma); 403 `admin profiles cannot be deleted here` (perfil admin) |
+| `restore-profile` | `user`, `creds[]`, `subs[]`, `state` (lo que devolvió `profileBackup`) | 200 `{ok:true}`; 400 `bad profile` (`user.id` ≠ `id`); 409 `already exists`; 403 `forbidden` |
+| `coach-pending` | `item`: `{kind:"plan",plan_id,bundle}` · `{kind:"patch",plan_id,coach,changes[]}` · `{kind:"confirm",coach,decisions[{id,ok}]}` | 200 `{ok:true,pending:n}`; 404 `no such profile`; 400 `bad item`; 403 `forbidden` |
+
+`coach-pending`: un plan nuevo descarta los planes y ajustes anteriores en espera pero **no** las
+confirmaciones (`confirm`); la cola guarda como máximo 20 elementos.
+
+### Archivos de la carpeta de datos que la web lee directamente
+
+La web lee estos archivos sin pasar por la app, así que su nombre y formato también son contrato:
+
+- la clave de firma, `db.json` (`users`, `creds`, `subs` con `userId`) y `state-<id>.json` (el estado del
+  cliente: `workouts`, `pendingWorkouts`, `exWeights`…).
+- `pending-<id>.json`: lista de `{...item, key, at}` en espera para ese perfil.
+- Por eso AezioGym arranca con `SHARED_DATA=1` (`docker-compose.yml`): no cierra a 0600 la clave ni
+  `db.json` (la 1.4.5 lo hace al arrancar y dejaría a la web sin poder leerlos) y escribe `db.json` con 0644.
+  El permiso de la clave (640 `root:www-data`) lo pone el propietario en el anfitrión y la app no lo toca.
+
+### Llamadas de la app a Aezio
+
+- `GET https://aezio.website/api/app-routines?token=<token>` (sin cookies): «Añadir a mi app». La web
+  abre la app en `https://gym.aezio.website/#/import/<token>`; el token vale una vez (410 si caducó).
+- `GET https://aezio.website/api/app/exercises` → `{"ids":[...]}`, los ejercicios visibles.
+
+### Llamadas de la app a su propio servidor (sesión del cliente)
+
+- `GET /api/coach-pending` → `{items:[...]}`; `POST /api/coach-pending/ack` con `{keys:[...]}` → `{ok,pending}`.
+- El borrado de cuenta del cliente usa `POST /api/account/delete` de la 1.4.5 (pide escribir el nombre y
+  una prueba de propiedad). `POST /api/me/delete` de la 1.2.4 no se porta: la web no la usa.
+
+### Seguridad del acceso interno
+
+La web llama por el nombre de contenedor `opengym-web`, así que `/api/internal/` solo se ofrece cuando
+la petición llega con `Host: opengym-web` (variable `INTERNAL_HOST` del servicio web); por la URL pública
+(otro `Host`) devuelve 404. La firma sigue siendo lo que protege la ruta.
+
 ## Producción
 
 ```
