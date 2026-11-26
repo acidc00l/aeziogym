@@ -13,7 +13,9 @@ import { logRequest } from './net-log.js'
 import { MOBILE } from './mobile.js'
 import { APK_VARIANTS, APK_VARIANT } from './apk-variant.js'
 
-const REPO = 'DuarteSantos8/openGym'
+// AezioGym consulta sus propias versiones; nunca las de openGym. Sin releases publicadas (404)
+// no hay actualización ni error.
+const REPO = 'acidc00l/aeziogym'
 const LATEST_URL = `https://api.github.com/repos/${REPO}/releases/latest`
 export const RELEASES_PAGE = `https://github.com/${REPO}/releases/latest`
 
