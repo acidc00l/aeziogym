@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { parseCoachPlan, coachPlanChanges, applyCoachPlan, coachNextRoutine, applyCoachPatch, applyCoachPending, applyCoachConfirm } from './coach-import.js'
+import { parseCoachPlan, coachPlanChanges, applyCoachPlan, coachNextRoutine, applyCoachPatch, applyCoachPending, applyCoachConfirm, applyCoachMeasure } from './coach-import.js'
 import { EXDB } from './exercises.js'
 import { mergeStates, stampChange } from './sync-merge.js'
+import { normalizeMeasurementEntry } from './measurements.js'
 
 const lift = EXDB.find(e => e.bp !== 'cardio').id
 const lift2 = EXDB.filter(e => e.bp !== 'cardio')[1].id
@@ -106,7 +107,7 @@ describe('coach changes sent straight to the app', () => {
     const S = withPlan(36)
     S.week[2] = 'aezio-36-0'
     const result = applyCoachPending(S, [{ kind: 'plan', bundle: bundle(82, [0, 1, 2]) }])
-    expect(result).toEqual({ plans: 1, exercises: 0, confirmed: 0, rejected: 0 })
+    expect(result).toEqual({ plans: 1, exercises: 0, confirmed: 0, rejected: 0, measures: 0 })
     expect(S.routines.map(r => r.id)).toEqual(['mine', 'aezio-82-0', 'aezio-82-1', 'aezio-82-2'])
     expect(S.week).toEqual({ 1: 'mine' })
     expect(S.workouts).toEqual([{ id: 'w1' }])
@@ -133,7 +134,7 @@ describe('coach changes sent straight to the app', () => {
   it('skips an unreadable item without blocking the rest', () => {
     const S = withPlan(82)
     const result = applyCoachPending(S, [{ kind: 'plan', bundle: { nope: 1 } }, { kind: 'patch', changes: [{ routine: 'aezio-82-1', id: lift, sets: 5, reps: 5 }] }])
-    expect(result).toEqual({ plans: 0, exercises: 1, confirmed: 0, rejected: 0 })
+    expect(result).toEqual({ plans: 0, exercises: 1, confirmed: 0, rejected: 0, measures: 0 })
   })
 })
 
@@ -209,5 +210,81 @@ describe('AezioGym 1.4.5: unidad, catálogo y sincronización', () => {
       pendingWorkouts: [{ id: 'p', d: '2026-11-20', start: 1, entries: [{ id: lift, sets: [{ w: 80, r: 5, done: true }] }] }] }
     applyCoachConfirm(s, { decisions: [{ id: 'p', ok: true }] })
     expect(s.exWeights[lift]).toEqual({ w: 100, d: '2026-10-01' })
+  })
+})
+
+describe('applyCoachMeasure (revisión de Aezio)', () => {
+  const item = () => ({ kind: 'measure', entries: [
+    { d: '2026-11-01', weight: 80.5, chest: 100, abdomen: 85, bodyFat: 18, custom: { 'aezio-muscle-kg': 36, 'aezio-visceral': 8 } },
+    { d: '2026-11-08', weight: 80, hips: 98.4, custom: { 'aezio-water-pct': 55, 'aezio-fat-kg': 14.5 } }] })
+  const base = () => ({ unit: 'kg', bodyweight: [], measurements: [], customMeasurements: [], measurementEnabled: null })
+  const ent = (s, d) => s.measurements.find(m => m.d === d)
+  const val = (e, id) => e.other.find(o => o.id === id)
+
+  it('escribe peso y medidas por fecha, con la nota y las personalizadas con id fijo', () => {
+    const s = base()
+    expect(applyCoachMeasure(s, item())).toBe(2)
+    expect(s.bodyweight.map(b => [b.d, b.w])).toEqual([['2026-11-01', 80.5], ['2026-11-08', 80]])
+    const e = ent(s, '2026-11-01')
+    expect(e).toMatchObject({ chest: 100, abdomen: 85, bodyFat: 18, note: 'Revisión Aezio' })
+    expect(val(e, 'aezio-muscle-kg')).toMatchObject({ value: 36, unit: 'kg', name: 'Masa muscular' })
+    expect(val(e, 'aezio-visceral')).toMatchObject({ value: 8, unit: 'none' })
+    expect(s.customMeasurements.map(c => c.id).sort()).toEqual(['aezio-fat-kg', 'aezio-muscle-kg', 'aezio-visceral', 'aezio-water-pct'])
+    expect(s.customMeasurements.find(c => c.id === 'aezio-water-pct')).toEqual({ id: 'aezio-water-pct', name: 'Agua', unit: '%', enabled: true })
+    // Lo opcional que llega (abdomen, % graso) queda visible.
+    expect(s.measurementEnabled).toEqual(expect.arrayContaining(['abdomen', 'bodyFat', 'chest']))
+  })
+
+  it('lo de Aezio sustituye el peso del día (también varias lecturas) y gana por clave; el resto del día se conserva', () => {
+    const s = base()
+    s.bodyweight = [{ d: '2026-11-01', w: 79, t: 5, ins: [{ id: 'a1', at: '07:00', w: 79, t: 5 }, { id: 'b2', at: '21:00', w: 81, t: 6 }] }, { d: '2026-10-01', w: 77, t: 1 }]
+    s.measurements = [normalizeMeasurementEntry({ d: '2026-11-01', t: 10, chest: 90, neck: 38, note: 'mía', other: [{ id: 'mia', name: 'Rodilla', value: 40, unit: 'cm' }] }, [{ id: 'mia', name: 'Rodilla', unit: 'cm' }])]
+    s.customMeasurements = [{ id: 'mia', name: 'Rodilla', enabled: true, unit: 'cm' }]
+    applyCoachMeasure(s, item())
+    const day = s.bodyweight.find(b => b.d === '2026-11-01')
+    expect(day.w).toBe(80.5)
+    expect(day.ins.map(r => r.w)).toEqual([80.5])
+    expect(s.bodyweight.find(b => b.d === '2026-10-01').w).toBe(77)
+    const e = ent(s, '2026-11-01')
+    expect(e).toMatchObject({ chest: 100, neck: 38, abdomen: 85, note: 'mía' })
+    expect(val(e, 'mia').value).toBe(40)
+    expect(s.measurements.map(m => m.d)).toEqual(['2026-11-01', '2026-11-08'])
+  })
+
+  it('con la app en lb el peso se guarda en lb y las medidas siguen en cm', () => {
+    const s = { ...base(), unit: 'lb', measureUnit: 'in' }
+    applyCoachMeasure(s, item())
+    expect(s.bodyweight[0].w).toBeCloseTo(177.5, 1)
+    expect(ent(s, '2026-11-01').chest).toBe(100)
+  })
+
+  it('es idempotente: aplicarlo dos veces deja el mismo estado y no vuelve a marcar cambios', () => {
+    const s = base()
+    applyCoachMeasure(s, item())
+    const once = JSON.stringify(s)
+    expect(applyCoachMeasure(s, item())).toBe(0)
+    expect(JSON.stringify(s)).toBe(once)
+    expect(s.customMeasurements).toHaveLength(4)
+    expect(s.bodyweight).toHaveLength(2)
+  })
+
+  it('un valor nuevo de la misma fecha se aplica y sincroniza con el estampado normal', () => {
+    const prev = { ...base(), _ts: 1, edited: {}, deleted: {} }
+    applyCoachMeasure(prev, item())
+    const next = JSON.parse(JSON.stringify(prev))
+    const it2 = item(); it2.entries[0].weight = 79.5; it2.entries[0].chest = 101
+    applyCoachMeasure(next, it2)
+    next._ts = stampChange(prev, next, Date.now() + 1000)
+    expect(ent(next, '2026-11-01').chest).toBe(101)
+    expect(ent(next, '2026-11-01').t).toBeGreaterThan(ent(prev, '2026-11-01').t)
+    const merged = mergeStates(prev, next)
+    expect(ent(merged, '2026-11-01').chest).toBe(101)
+    expect(merged.bodyweight.find(b => b.d === '2026-11-01').w).toBe(79.5)
+  })
+
+  it('applyCoachPending lo despacha y cuenta las fechas cambiadas', () => {
+    const s = base()
+    expect(applyCoachPending(s, [{ kind: 'measure', key: 'k', ...item() }]).measures).toBe(2)
+    expect(applyCoachPending(s, [{ kind: 'measure', key: 'k', ...item() }]).measures).toBe(0)
   })
 })

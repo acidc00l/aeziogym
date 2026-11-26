@@ -10,6 +10,9 @@ import { insertChronological } from './backfill.js'
 import { stampWorkout } from './sync-merge.js'
 import { DEFAULT_GLYPH } from './glyphs.js'
 import { t } from './i18n.js'
+import { addWeighIn, removeWeighIn, readingsOf, dailyModeOf } from './weigh-ins.js'
+import { convertBodyWeight } from './units.js'
+import { normalizeMeasurementEntry, emptyMeasurement, MEASUREMENT_KEYS, DEFAULT_MEASUREMENT_KEYS } from './measurements.js'
 
 const signature = ex => JSON.stringify(ex || [])
 
@@ -146,16 +149,93 @@ export function applyCoachConfirm(s, item) {
   return out
 }
 
+// Medidas de la revisión de Aezio (Bitácora): un solo elemento con varias fechas. Las medidas
+// personalizadas llevan id fijo para no duplicarse nunca.
+const AEZIO_REVIEW_NOTE = 'Revisión Aezio'
+const AEZIO_READING_ID = 'aezio'
+const AEZIO_CUSTOM = [
+  { id: 'aezio-muscle-kg', name: 'Masa muscular', unit: 'kg' },
+  { id: 'aezio-water-pct', name: 'Agua', unit: '%' },
+  { id: 'aezio-visceral', name: 'Grasa visceral', unit: 'none' },
+  { id: 'aezio-fat-kg', name: 'Masa grasa', unit: 'kg' }
+]
+
+/**
+ * Aplica una revisión de Aezio: `item.entries` = [{ d, weight?, chest?, ..., custom?: { 'aezio-…': n } }].
+ * Lo de Aezio gana sobre lo que hubiera ese día; las demás medidas del día se conservan. El peso va
+ * en kg y se guarda en la unidad del perfil; las medidas, en cm (canónico). Aplicar dos veces lo
+ * mismo no cambia nada (ni siquiera la marca de cambio). Devuelve cuántas fechas cambiaron.
+ */
+export function applyCoachMeasure(s, item) {
+  const entries = Array.isArray(item && item.entries) ? item.entries : []
+  let changed = 0
+  const now = Date.now()
+  const unit = s.unit === 'lb' ? 'lb' : 'kg'
+  for (const e of entries) {
+    if (!e || typeof e !== 'object' || !/^\d{4}-\d{2}-\d{2}$/.test(e.d || '')) continue
+    let touched = false
+    // Peso: la lectura de Aezio sustituye a las demás de ese día.
+    if (Number(e.weight) > 0) {
+      const w = convertBodyWeight(Number(e.weight), 'kg', unit)
+      const day = (s.bodyweight || []).find(b => b && b.d === e.d)
+      const rs = day ? readingsOf(day) : []
+      const mine = rs.find(r => r.id === AEZIO_READING_ID)
+      if (!(rs.length === 1 && mine && Number(mine.w) === Math.round(w * 10) / 10)) {
+        // Primero la de Aezio y luego fuera las otras: así el día nunca se queda vacío.
+        addWeighIn(s, { d: e.d, at: null, w, t: now, id: AEZIO_READING_ID }, dailyModeOf(s))
+        for (const r of rs) if (r.id !== AEZIO_READING_ID) removeWeighIn(s, e.d, r.id, now, dailyModeOf(s))
+        touched = true
+      }
+    }
+    // Medidas (cm, %) y personalizadas.
+    const custom = e.custom && typeof e.custom === 'object' ? e.custom : {}
+    const customIds = AEZIO_CUSTOM.filter(c => custom[c.id] != null)
+    const builtin = MEASUREMENT_KEYS.filter(k => e[k] != null)
+    if (builtin.length || customIds.length) {
+      s.customMeasurements = Array.isArray(s.customMeasurements) ? s.customMeasurements : []
+      for (const c of customIds) {
+        if (!s.customMeasurements.some(x => x && x.id === c.id)) s.customMeasurements.push({ ...c, enabled: true })
+      }
+      s.measurements = Array.isArray(s.measurements) ? s.measurements : []
+      const i = s.measurements.findIndex(m => m && m.d === e.d)
+      const old = i >= 0 ? normalizeMeasurementEntry(s.measurements[i], s.customMeasurements) : emptyMeasurement(e.d, s.customMeasurements)
+      const raw = { ...old, other: old.other.map(o => ({ ...o })) }
+      for (const k of builtin) raw[k] = e[k]
+      for (const c of customIds) {
+        const o = raw.other.find(x => x.id === c.id)
+        if (o) { o.value = custom[c.id]; o.unit = c.unit; o.name = c.name }
+        else raw.other.push({ id: c.id, name: c.name, value: custom[c.id], unit: c.unit })
+      }
+      if (!raw.note) raw.note = AEZIO_REVIEW_NOTE
+      const next = normalizeMeasurementEntry(raw, s.customMeasurements)
+      if (i < 0 || JSON.stringify(next) !== JSON.stringify(old)) {
+        next.t = Math.max(now, Number(old.t) + 1 || 0)
+        if (i >= 0) s.measurements[i] = next
+        else s.measurements.push(next)
+        s.measurements.sort((a, b) => a.d.localeCompare(b.d))
+        touched = true
+      }
+      // Que lo recibido se vea: una medida opcional apagada (abdomen, % graso) se enciende.
+      const enabled = Array.isArray(s.measurementEnabled) ? s.measurementEnabled : DEFAULT_MEASUREMENT_KEYS
+      const missing = builtin.filter(k => !enabled.includes(k))
+      if (missing.length) s.measurementEnabled = [...enabled, ...missing]
+    }
+    if (touched) changed++
+  }
+  return changed
+}
+
 /**
  * Aplica lo que el entrenador dejó en espera (planes enteros o ajustes), en orden.
  * Devuelve qué se aplicó, para avisar al cliente con el mensaje que toca.
  */
 export function applyCoachPending(s, items) {
-  const result = { plans: 0, exercises: 0, confirmed: 0, rejected: 0 }
+  const result = { plans: 0, exercises: 0, confirmed: 0, rejected: 0, measures: 0 }
   for (const item of Array.isArray(items) ? items : []) {
     try {
       if (item.kind === 'plan') { applyCoachPlan(s, parseCoachPlan(item.bundle, s.unit === 'lb' ? 'lb' : 'kg')); result.plans++ }
       else if (item.kind === 'patch') result.exercises += applyCoachPatch(s, item)
+      else if (item.kind === 'measure') result.measures += applyCoachMeasure(s, item)
       else if (item.kind === 'confirm') { const c = applyCoachConfirm(s, item); result.confirmed += c.confirmed; result.rejected += c.rejected }
     } catch (e) { /* un envío ilegible no debe bloquear los demás */ }
   }

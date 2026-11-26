@@ -341,6 +341,30 @@ export function referencedHashes(state) {
   return out;
 }
 
+/**
+ * The photos and videos of the logged workouts of a state, by file: Map hash -> { workoutId, d,
+ * hash, kind, mime, size, dur, at, poster, isPoster }. Only workouts[].media and each one's poster
+ * (the files Aezio's coach may be shown, with the client's consent); not exercises, sets, sounds or
+ * the avatar. A poster answers with its parent's `at` and `kind`. `at` is 0 when the ref has none.
+ */
+export function workoutMediaIndex(state) {
+  const out = new Map();
+  if (!state || typeof state !== 'object' || !Array.isArray(state.workouts)) return out;
+  const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
+  const num = v => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+  for (const w of state.workouts) {
+    if (!isObj(w) || !Array.isArray(w.media)) continue;
+    for (const m of w.media) {
+      if (!isObj(m) || typeof m.hash !== 'string' || !HASH_RE.test(m.hash)) continue;
+      const base = { workoutId: w.id ?? null, d: typeof w.d === 'string' ? w.d : null, kind: typeof m.kind === 'string' ? m.kind : null, at: num(m.at) > 0 ? Math.round(m.at) : 0 };
+      const post = isObj(m.poster) && typeof m.poster.hash === 'string' && HASH_RE.test(m.poster.hash) ? m.poster : null;
+      if (!out.has(m.hash)) out.set(m.hash, { ...base, hash: m.hash, mime: typeof m.mime === 'string' ? m.mime : null, size: num(m.size), dur: num(m.dur), poster: post ? post.hash : null, isPoster: false });
+      if (post && !out.has(post.hash)) out.set(post.hash, { ...base, hash: post.hash, mime: typeof post.mime === 'string' ? post.mime : null, size: num(post.size), dur: null, poster: null, isPoster: true });
+    }
+  }
+  return out;
+}
+
 /* ---------------------------------------------------------------- the store */
 
 const round1 = n => Math.round(n * 10) / 10;

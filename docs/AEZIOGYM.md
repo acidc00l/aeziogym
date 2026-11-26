@@ -76,7 +76,26 @@ cambio de versión.
 |---|---|---|
 | `delete-profile` | — | 200 `{ok:true,result:"deleted"}` o `"missing"`; 403 `forbidden` (firma); 403 `admin profiles cannot be deleted here` (perfil admin) |
 | `restore-profile` | `user`, `creds[]`, `subs[]`, `state` (lo que devolvió `profileBackup`) | 200 `{ok:true}`; 400 `bad profile` (`user.id` ≠ `id`); 409 `already exists`; 403 `forbidden` |
-| `coach-pending` | `item`: `{kind:"plan",plan_id,bundle}` · `{kind:"patch",plan_id,coach,changes[]}` · `{kind:"confirm",coach,decisions[{id,ok}]}` | 200 `{ok:true,pending:n}`; 404 `no such profile`; 400 `bad item`; 403 `forbidden` |
+| `coach-pending` | `item`: `{kind:"plan",plan_id,bundle}` · `{kind:"patch",plan_id,coach,changes[]}` · `{kind:"confirm",coach,decisions[{id,ok}]}` · `{kind:"measure",entries[]}` (ver abajo) | 200 `{ok:true,pending:n}`; 404 `no such profile`; 400 `bad item`; 403 `forbidden` |
+| `workout-media` | `hash` (sha256 hex de 64). Cabecera opcional `Range: bytes=a-b` | 200 o 206 con el archivo (Content-Type guardado, `Accept-Ranges`, `Content-Range`, cabecera `X-Media-At` con la fecha `at` del medio en ms); 404 si ese hash no está en un `workouts[].media[]` (ni es su póster) del perfil; 400 `bad hash`; 416 rango imposible; 403 `forbidden` |
+| `workout-media-list` | — | 200 `{ok:true,items:[{workoutId,d,hash,kind,mime,size,dur,at,poster}],usedBytes,quotaBytes}`; 404 `no such profile`; 403 `forbidden` |
+
+`measure` (revisión de la Bitácora, un solo elemento para todo el historial): `{"kind":"measure","entries":[{"d":"AAAA-MM-DD", ...}]}`
+con 1 a 400 entradas. Claves permitidas de cada entrada (cualquier otra, o un valor fuera de rango, es 400 `bad item`
+para todo el elemento): `weight` (kg, 1–400), `chest`, `abdomen`, `hips`, `upperArmLeft`, `upperArmRight`, `thighLeft`,
+`thighRight`, `calfLeft`, `calfRight` (cm, 1–300), `bodyFat` (%, 0–100) y `custom`: `{"aezio-muscle-kg":1–400,
+"aezio-water-pct":0–100,"aezio-visceral":0–60,"aezio-fat-kg":1–400}`. La app (`applyCoachMeasure`) escribe el peso
+del día en `S.bodyweight` (en kg o lb según el perfil; la lectura de Aezio sustituye a las que hubiera ese día) y las
+medidas en `S.measurements` de esa fecha (en cm; las claves de Aezio ganan, el resto del día se conserva, nota
+«Revisión Aezio» si no había). Crea si faltan las medidas personalizadas `aezio-muscle-kg` «Masa muscular» (kg),
+`aezio-water-pct` «Agua» (%), `aezio-visceral` «Grasa visceral» (sin unidad) y `aezio-fat-kg` «Masa grasa» (kg), y
+enciende en la libreta las medidas opcionales que lleguen (abdomen, % graso). Aplicarlo dos veces deja el mismo estado.
+Un plan nuevo no descarta los `measure` en espera.
+
+`workout-media`: se pide por `POST` (cuerpo JSON como las demás, el `hash` dentro) y la firma es `workout-media:<id>:<ts>`;
+la de la lista, `workout-media-list:<id>:<ts>`. Solo se sirven archivos de los entrenos del perfil (`workouts[].media` y su
+póster), no los de ejercicios, series, sonidos ni avatar. El filtrado por consentimiento (`at` ≥ fecha de aceptación) lo
+hace la web con `X-Media-At` / `at`.
 
 `coach-pending`: un plan nuevo descarta los planes y ajustes anteriores en espera pero **no** las
 confirmaciones (`confirm`); la cola guarda como máximo 20 elementos.

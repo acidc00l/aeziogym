@@ -35,7 +35,7 @@ import {
   dropWatchLinks, boxOf, putSnapshot, pushEvents, queuedEvents, ackEvents
 } from './watch-relay.js';
 import { startAdminSocket } from './admin-socket.js';
-import { createMediaStore, mediaLimits, mediaConfig, MediaError, HASH_RE } from './media.js';
+import { createMediaStore, mediaLimits, mediaConfig, MediaError, HASH_RE, workoutMediaIndex } from './media.js';
 import { effectiveRoutineId } from './queue.js';
 import { stampPut, highestStamp } from './sync-stamps.js';
 import { atomicWrite as durableWrite } from './durable.js';
@@ -252,8 +252,45 @@ const stateFile = uid => path.join(DATA, 'state-' + uid.replace(/[^a-zA-Z0-9_-]/
 // and then acknowledges; writing it into the state file from outside would be overwritten by the
 // next push from the phone.
 const pendingFile = uid => path.join(DATA, 'pending-' + uid.replace(/[^a-zA-Z0-9_-]/g, '') + '.json');
-const PENDING_KINDS = ['plan', 'patch', 'confirm'];
+const PENDING_KINDS = ['plan', 'patch', 'confirm', 'measure'];
 const PENDING_MAX = 20;
+
+// The `measure` item (Aezio's review log, one element for the whole history): { kind:'measure',
+// entries:[{ d:'AAAA-MM-DD', weight?, chest?, ... , custom?:{...} }] }, 1..400 entries. Strict like
+// the rest of the contract: a date that exists, numbers inside a range, only the keys listed.
+const MEASURE_MAX_ENTRIES = 400;
+const MEASURE_RANGES = {
+  weight: [1, 400], chest: [1, 300], abdomen: [1, 300], hips: [1, 300],
+  upperArmLeft: [1, 300], upperArmRight: [1, 300], thighLeft: [1, 300], thighRight: [1, 300],
+  calfLeft: [1, 300], calfRight: [1, 300], bodyFat: [0, 100]
+};
+const MEASURE_CUSTOM_RANGES = {
+  'aezio-muscle-kg': [1, 400], 'aezio-water-pct': [0, 100], 'aezio-visceral': [0, 60], 'aezio-fat-kg': [1, 400]
+};
+function validIsoDate(d) {
+  if (typeof d !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return false;
+  const t = new Date(d + 'T00:00:00Z');
+  return !Number.isNaN(t.getTime()) && t.toISOString().slice(0, 10) === d;
+}
+const inRange = (v, [lo, hi]) => typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi;
+const plainObject = v => !!v && typeof v === 'object' && !Array.isArray(v);
+function validMeasureItem(item) {
+  if (!Array.isArray(item.entries) || item.entries.length < 1 || item.entries.length > MEASURE_MAX_ENTRIES) return false;
+  if (Object.keys(item).some(k => k !== 'kind' && k !== 'entries')) return false;
+  for (const e of item.entries) {
+    if (!plainObject(e) || !validIsoDate(e.d)) return false;
+    for (const [k, v] of Object.entries(e)) {
+      if (k === 'd') continue;
+      if (k === 'custom') {
+        if (!plainObject(v)) return false;
+        for (const [ck, cv] of Object.entries(v)) {
+          if (!Object.hasOwn(MEASURE_CUSTOM_RANGES, ck) || !inRange(cv, MEASURE_CUSTOM_RANGES[ck])) return false;
+        }
+      } else if (!Object.hasOwn(MEASURE_RANGES, k) || !inRange(v, MEASURE_RANGES[k])) return false;
+    }
+  }
+  return true;
+}
 function readPending(uid) {
   try { const items = JSON.parse(fs.readFileSync(pendingFile(uid), 'utf8')); return Array.isArray(items) ? items : []; } catch { return []; }
 }
@@ -2280,6 +2317,51 @@ async function sendMediaFile(res, f, hash) {
   catch { res.destroy(); }   // the client went away mid-download; nothing left to answer
 }
 
+// sendMediaFile with Range (one range: bytes=a-b, a-, -n), for Aezio's internal route: Safari will
+// not play a video it cannot seek in. A malformed or unsatisfiable range is 416; several ranges
+// are answered whole. `at` goes out as X-Media-At.
+async function sendMediaRange(res, f, hash, rangeHeader, at) {
+  let fd;
+  try { fd = fs.openSync(f.path, 'r'); }
+  catch { throw new MediaError(404, 'media-missing'); }
+  const size = fs.fstatSync(fd).size;
+  const headers = {
+    'Content-Type': f.mime,
+    'Accept-Ranges': 'bytes',
+    'Cache-Control': 'private, no-store',
+    'X-Content-Type-Options': 'nosniff',
+    'Content-Security-Policy': "default-src 'none'; sandbox",
+    'Cross-Origin-Resource-Policy': 'same-origin',
+    'Content-Disposition': `inline; filename="${hash}.${f.ext}"`,
+    'X-Robots-Tag': 'noindex',
+    'X-Media-At': String(at || 0)
+  };
+  let start = 0, end = size - 1, code = 200;
+  const m = typeof rangeHeader === 'string' ? /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim()) : null;
+  if (typeof rangeHeader === 'string' && rangeHeader.trim() && !m && /^bytes=/.test(rangeHeader.trim()) && !rangeHeader.includes(',')) {
+    fs.closeSync(fd);
+    res.writeHead(416, { ...headers, 'Content-Range': `bytes */${size}` });
+    return res.end();
+  }
+  if (m) {
+    const [, a, b] = m;
+    if (a === '' && b === '') { fs.closeSync(fd); res.writeHead(416, { ...headers, 'Content-Range': `bytes */${size}` }); return res.end(); }
+    if (a === '') { start = Math.max(0, size - Number(b)); }
+    else { start = Number(a); if (b !== '') end = Math.min(end, Number(b)); }
+    if (start > end || start >= size || (a === '' && Number(b) === 0)) {
+      fs.closeSync(fd);
+      res.writeHead(416, { ...headers, 'Content-Range': `bytes */${size}` });
+      return res.end();
+    }
+    code = 206;
+    headers['Content-Range'] = `bytes ${start}-${end}/${size}`;
+  }
+  headers['Content-Length'] = String(end - start + 1);
+  res.writeHead(code, headers);
+  try { await pipeline(fs.createReadStream(null, { fd, start, end }), res); }
+  catch { res.destroy(); }
+}
+
 // GHSA-699c-6p5r-q574: a device sends the account it means a media request for. A sync started
 // under A that is still sending after this browser signed in as B (another tab) must not land in
 // B's folder. Without the header (an older app) the session alone decides, as before.
@@ -2903,13 +2985,43 @@ const routes = {
     if (!db.users.some(u => u.id === body.id)) return json(res, 404, { error: 'no such profile' });
     const item = body.item;
     if (!item || typeof item !== 'object' || !PENDING_KINDS.includes(item.kind)) return json(res, 400, { error: 'bad item' });
+    if (item.kind === 'measure' && !validMeasureItem(item)) return json(res, 400, { error: 'bad item' });
     let items = readPending(body.id);
     // A newer plan makes any older plan (and the tweaks meant for it) pointless; the confirmations
     // of workouts logged afterwards do not depend on the plan and stay.
-    if (item.kind === 'plan') items = items.filter(i => i.kind === 'confirm');
+    if (item.kind === 'plan') items = items.filter(i => i.kind === 'confirm' || i.kind === 'measure');
     items.push({ ...item, key: crypto.randomBytes(8).toString('hex'), at: Date.now() });
     atomicWrite(pendingFile(body.id), JSON.stringify(items.slice(-PENDING_MAX)));
     json(res, 200, { ok: true, pending: Math.min(items.length, PENDING_MAX) });
+  },
+
+  // A file of one of the profile's logged workouts, for Aezio's coach view (docs/AEZIOGYM.md). The
+  // hash is only served when the profile's own state lists it in workouts[].media (or as a poster
+  // of one): any other hash, even one that exists in that folder, is as missing as an unknown one.
+  // The signature covers `workout-media:<id>:<ts>`, as the other internal calls; the hash is a
+  // lookup inside that profile's own state. `at` of the media travels in X-Media-At so the web can
+  // filter by consent. Streamed, with Range for Safari's video.
+  'POST /api/internal/workout-media': async (req, res) => {
+    const body = await readBody(req);
+    if (!validInternalSignature('workout-media', body.id, body.ts, body.sig)) return json(res, 403, { error: 'forbidden' });
+    if (!db.users.some(u => u.id === body.id)) return json(res, 404, { error: 'no such profile' });
+    if (typeof body.hash !== 'string' || !HASH_RE.test(body.hash)) return json(res, 400, { error: 'bad hash' });
+    const S = readState(body.id);
+    const ref = workoutMediaIndex(S).get(body.hash);
+    const f = ref ? MEDIA.file(body.id, body.hash) : null;
+    if (!ref || !f) return json(res, 404, { error: 'media-missing' });
+    await sendMediaRange(res, f, body.hash, req.headers.range, ref.at);
+  },
+
+  // What the profile's workouts hold in photos and videos, and the bytes its folder uses in all.
+  'POST /api/internal/workout-media-list': async (req, res) => {
+    const body = await readBody(req);
+    if (!validInternalSignature('workout-media-list', body.id, body.ts, body.sig)) return json(res, 403, { error: 'forbidden' });
+    if (!db.users.some(u => u.id === body.id)) return json(res, 404, { error: 'no such profile' });
+    const items = [...workoutMediaIndex(readState(body.id)).values()].filter(m => !m.isPoster)
+      .map(({ workoutId, d, hash, kind, mime, size, dur, at, poster }) => ({ workoutId, d, hash, kind, mime, size, dur, at, poster }));
+    const u = MEDIA.usage(body.id);
+    json(res, 200, { ok: true, items, usedBytes: u.bytes, quotaBytes: u.quotaBytes });
   },
 
   // What the signed-in app has waiting, and its acknowledgement once it applied and saved it.

@@ -235,8 +235,10 @@ export const DEF = {
   lastGymCardId: null,
   // Whether the check-in feature is on at all (Settings toggle). Off hides the Home
   // card and the /checkin route; the saved gymCards stay so turning it back on restores them.
-  // Defaults on; an older profile without the key reads as on (`!== false`).
-  checkIn: true,
+  // AezioGym: off by default (whoever wants it turns it on in Modules). A saved profile keeps its own
+  // value; one that never stored the key reads as on in lib/modules.js (`!== false`), a bare state
+  // with no defaults behind it, not the app's starting point.
+  checkIn: false,
   // Whether the body-weight summary card is shown on Home. Off only hides that card: existing
   // entries, Stats, imports and the separate pre-workout weigh-in flow keep working.
   // Defaults on; an older profile without the key reads as on (`!== false`).
@@ -1976,7 +1978,7 @@ export const useStore = create((set, get) => {
           let applied = []
           try { applied = JSON.parse(localStorage.getItem(COACH_APPLIED_KEY)) || [] } catch { /* none yet */ }
           const fresh = items.filter(i => !applied.includes(i.key))
-          let result = { plans: 0, exercises: 0, confirmed: 0, rejected: 0 }
+          let result = { plans: 0, exercises: 0, confirmed: 0, rejected: 0, measures: 0 }
           if (fresh.length) {
             get().update(S => { result = applyCoachPending(S, fresh) })
             try { localStorage.setItem(COACH_APPLIED_KEY, JSON.stringify([...applied, ...fresh.map(i => i.key)].slice(-60))) } catch { /* storage full */ }
