@@ -31,3 +31,24 @@ export async function disablePush() {
 }
 
 export const sendTestPush = () => api('/api/push/test', { method: 'POST', body: '{}' })
+
+// Re-subscribe quietly when the server's VAPID keys changed (or it lost this device's subscription):
+// otherwise every reminder fails with VapidPkHashMismatch and the user never finds out. Only acts
+// when notifications are already allowed and this device was subscribed — it never prompts.
+export async function refreshPush() {
+  if (!pushSupported() || Notification.permission !== 'granted') return
+  const reg = await navigator.serviceWorker.ready
+  const sub = await reg.pushManager.getSubscription()
+  if (!sub) return
+  const { key } = await api('/api/push/public-key')
+  const want = urlBase64ToUint8Array(key)
+  const raw = sub.options && sub.options.applicationServerKey
+  const have = raw ? new Uint8Array(raw) : null
+  let current = sub
+  if (!have || have.length !== want.length || have.some((b, i) => b !== want[i])) {
+    await sub.unsubscribe().catch(() => {})
+    current = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: want })
+  }
+  // Idempotent on the server (replaces the same endpoint): also heals a subscription it dropped.
+  await api('/api/push/subscribe', { method: 'POST', body: JSON.stringify({ subscription: current.toJSON() }) })
+}

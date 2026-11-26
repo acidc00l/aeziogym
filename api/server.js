@@ -78,7 +78,10 @@ async function sendPush(userId, payload) {
     try { await webpush.sendNotification({ endpoint: sub.endpoint, keys: sub.keys }, body, { urgency: 'high' }); }
     catch (e) {
       console.error('push send failed', userId, e.statusCode, e.body || e.message);
-      if (e.statusCode === 404 || e.statusCode === 410) {
+      // 404/410: the device unsubscribed. 400/403 VapidPkHashMismatch: it was subscribed with old keys —
+      // useless now; the app re-subscribes with the current key next time it opens (refreshPush).
+      const staleKey = (e.statusCode === 400 || e.statusCode === 403) && /VapidPkHashMismatch|BadJwtToken/i.test(String(e.body || ''));
+      if (e.statusCode === 404 || e.statusCode === 410 || staleKey) {
         db.subs = db.subs.filter(s => s.endpoint !== sub.endpoint); dirty = true;
       }
     }

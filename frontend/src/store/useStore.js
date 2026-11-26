@@ -5,6 +5,7 @@ import { registerCustom } from '../lib/exercises.js'
 import { DEMO, DEMO_SEEDED } from '../lib/demo.js'
 import { MOBILE, nativeLoad, nativeSave, syncReminder } from '../lib/mobile.js'
 import { applyCoachPending } from '../lib/coach-import.js'
+import { refreshPush } from '../lib/push.js'
 import { t } from '../lib/i18n.js'
 import { useUI } from './useUI.js'
 
@@ -212,6 +213,8 @@ export const useStore = create((set, get) => {
         if (get().S.reminder?.on && get().S.reminder.tz !== tz) {
           get().update(s => { s.reminder = { ...s.reminder, tz } })
         }
+        // Avisos: si el servidor cambió sus claves, vuelve a apuntar este dispositivo sin preguntar
+        refreshPush().catch(() => { })
       } catch (e) {
         if (e.status === 401) get().setUser(null)
       }
