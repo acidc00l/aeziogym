@@ -77,8 +77,8 @@ cambio de versión.
 | `delete-profile` | — | 200 `{ok:true,result:"deleted"}` o `"missing"`; 403 `forbidden` (firma); 403 `admin profiles cannot be deleted here` (perfil admin) |
 | `restore-profile` | `user`, `creds[]`, `subs[]`, `state` (lo que devolvió `profileBackup`) | 200 `{ok:true}`; 400 `bad profile` (`user.id` ≠ `id`); 409 `already exists`; 403 `forbidden` |
 | `coach-pending` | `item`: `{kind:"plan",plan_id,bundle}` · `{kind:"patch",plan_id,coach,changes[]}` · `{kind:"confirm",coach,decisions[{id,ok}]}` · `{kind:"measure",entries[]}` (ver abajo) | 200 `{ok:true,pending:n}`; 404 `no such profile`; 400 `bad item`; 403 `forbidden` |
-| `workout-media` | `hash` (sha256 hex de 64). Cabecera opcional `Range: bytes=a-b` | 200 o 206 con el archivo (Content-Type guardado, `Accept-Ranges`, `Content-Range`, cabecera `X-Media-At` con la fecha `at` del medio en ms); 404 si ese hash no está en un `workouts[].media[]` (ni es su póster) del perfil; 400 `bad hash`; 416 rango imposible; 403 `forbidden` |
-| `workout-media-list` | — | 200 `{ok:true,items:[{workoutId,d,hash,kind,mime,size,dur,at,poster}],usedBytes,quotaBytes}`; 404 `no such profile`; 403 `forbidden` |
+| `workout-media` | `hash` (sha256 hex de 64). Cabecera opcional `Range: bytes=a-b` | 200 o 206 con el archivo (Content-Type guardado, `Accept-Ranges`, `Content-Range`, cabecera `X-Media-At` con la fecha `at` del medio en ms); 404 si ese hash no está en un `workouts[].media[]` ni en el `media` de una serie (`workouts[].entries[].sets[].media`, vídeo de forma), ni es su póster; 400 `bad hash`; 416 rango imposible; 403 `forbidden` |
+| `workout-media-list` | — | 200 `{ok:true,items:[{workoutId,d,hash,kind,mime,size,dur,at,poster,source,exId?,expiresAt}],usedBytes,quotaBytes,retentionDays}`; 404 `no such profile`; 403 `forbidden` |
 
 `measure` (revisión de la Bitácora, un solo elemento para todo el historial): `{"kind":"measure","entries":[{"d":"AAAA-MM-DD", ...}]}`
 con 1 a 400 entradas. Claves permitidas de cada entrada (cualquier otra, o un valor fuera de rango, es 400 `bad item`
@@ -93,9 +93,30 @@ enciende en la libreta las medidas opcionales que lleguen (abdomen, % graso). Ap
 Un plan nuevo no descarta los `measure` en espera.
 
 `workout-media`: se pide por `POST` (cuerpo JSON como las demás, el `hash` dentro) y la firma es `workout-media:<id>:<ts>`;
-la de la lista, `workout-media-list:<id>:<ts>`. Solo se sirven archivos de los entrenos del perfil (`workouts[].media` y su
-póster), no los de ejercicios, series, sonidos ni avatar. El filtrado por consentimiento (`at` ≥ fecha de aceptación) lo
-hace la web con `X-Media-At` / `at`.
+la de la lista, `workout-media-list:<id>:<ts>`. Solo se sirven archivos de los entrenos del perfil (`workouts[].media`, los
+vídeos de forma por serie y los pósters de ambos), no los de ejercicios propios, sonidos ni avatar. El filtrado por
+consentimiento (`at` ≥ fecha de aceptación) lo hace la web con `X-Media-At` / `at`.
+
+Cada item de `workout-media-list` lleva `source`: `"workout"` (foto o vídeo del entreno) o `"set"` (vídeo de forma de una serie);
+en `set` también `exId`, el id del ejercicio de esa entrada (puede ser `null`). `expiresAt` es `at` + la retención, en ms, o `null`
+si la retención es 0 o el medio no tiene `at`. La respuesta trae `retentionDays` (el valor de `MEDIA_RETENTION_DAYS`).
+
+### Caducidad de fotos y vídeos (`MEDIA_RETENTION_DAYS`)
+
+- `MEDIA_RETENTION_DAYS`: días que vive un medio de entreno, contados desde su `at`. **15 por defecto; 0 la desactiva.** Un valor
+  vacío o inválido vale 15.
+- En la pasada horaria de la API (la misma del `sweep`, y a los 5 minutos de arrancar), para cada perfil se quitan las referencias
+  con `at` más antiguo que la retención de `workouts[].media[]` y de `workouts[].entries[].sets[].media`. Se escribe por el camino
+  sellado de los cambios de entrenador (`writeStateAs`): el móvil lo recibe en la siguiente sincronización y el borrado gana, aunque
+  el cliente no abra la app. Sin nada caducado no se escribe (no se toca `_rev`).
+- No caducan las fotos de progreso por día (`dayPhotos`), los medios de ejercicios (propios o integrados), el avatar ni los sonidos.
+- El entreno tocado recuerda los hashes caducados de su lista en `mediaGone` (hasta 100): la fusión del cliente
+  (`mergeWorkoutMedia`) no deja que un dispositivo con estado antiguo los resucite al sincronizar ni vuelva a subir el archivo.
+  **Hace falta la versión de la app con ese cambio**; una app anterior puede traer de vuelta una foto caducada si edita ese mismo
+  entreno sin haber sincronizado (con el archivo ya borrado se muestra como «no está en este dispositivo»). Los vídeos por serie viajan dentro de `entries`, que gana por sello: solo volverían si un dispositivo desfasado editara las series de ese entreno después de la caducidad.
+- Los archivos quedan sin referencia y los borra el `sweep` pasada `MEDIA_GC_GRACE_DAYS` (14 por defecto; en Aezio se pone 1 por
+  compose, sin cambiar el valor de la imagen). Mientras tanto la ficha sigue sirviéndolos si algo aún los lista.
+- Variable solo para pruebas: `MEDIA_SWEEP_FIRST_MS` (ms hasta la primera pasada, 300000 por defecto).
 
 `coach-pending`: un plan nuevo descarta los planes y ajustes anteriores en espera pero **no** las
 confirmaciones (`confirm`); la cola guarda como máximo 20 elementos.

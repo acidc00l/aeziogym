@@ -343,10 +343,35 @@ test('workout-media-list: lista los medios de los entrenos y los bytes usados; f
   const { h, hv, hp } = await withMedia(t);
   const r = await h.internal('workout-media-list', USER);
   assert.equal(r.status, 200);
-  assert.deepEqual(r.body.items, [{ workoutId: 'w1', d: '2026-11-01', hash: hv, kind: 'video', mime: 'video/mp4', size: 200, dur: 4.5, at: 1700000000000, poster: hp }]);
+  assert.deepEqual(r.body.items, [{ workoutId: 'w1', d: '2026-11-01', hash: hv, kind: 'video', mime: 'video/mp4', size: 200, dur: 4.5, at: 1700000000000, poster: hp, source: 'workout', expiresAt: 1700000000000 + 15 * 86400000 }]);
+  assert.equal(r.body.retentionDays, 15);
   assert.equal(r.body.usedBytes, 200 + 12 + 18);
   assert.ok(r.body.quotaBytes >= 0);
   const ts = String(Date.now());
   assert.equal((await h.internal('workout-media-list', USER, {}, { ts, sig: sign('workout-media', USER, ts) })).status, 403);
   assert.equal((await h.internal('workout-media-list', 'u_fantasma')).status, 404);
+});
+
+test('workout-media y workout-media-list incluyen los vídeos de forma por serie (source set, con el ejercicio)', async t => {
+  const { h, hv, hp } = await withMedia(t);
+  const hs = sha('s'), hq = sha('q');
+  const dir = path.join(h.dataDir, 'uploads', USER);
+  fs.writeFileSync(path.join(dir, `${hs}.mp4`), Buffer.from('set-video'));
+  fs.writeFileSync(path.join(dir, `${hq}.webp`), Buffer.from('set-poster'));
+  const st = JSON.parse(fs.readFileSync(h.file(`state-${USER}.json`), 'utf8'));
+  st.workouts[1].entries = [{ id: '0025', sets: [{ w: 50, r: 5 }, { w: 60, r: 5, media: [{ kind: 'video', hash: hs, mime: 'video/mp4', size: 9, width: 10, height: 10, dur: 3, at: 1700000100000, poster: { hash: hq, mime: 'image/webp', size: 10, width: 5, height: 5 } }] }] }];
+  fs.writeFileSync(h.file(`state-${USER}.json`), JSON.stringify(st));
+  const r = await h.internal('workout-media-list', USER);
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.items.map(i => [i.hash, i.source, i.exId]), [[hv, 'workout', undefined], [hs, 'set', '0025']]);
+  const set = r.body.items[1];
+  assert.equal(set.workoutId, 'w2');
+  assert.equal(set.poster, hq);
+  assert.equal(set.expiresAt, 1700000100000 + 15 * 86400000);
+  const f = await h.media({ hash: hs });
+  assert.equal(f.status, 200);
+  assert.equal(f.buf.toString(), 'set-video');
+  assert.equal(f.headers.get('x-media-at'), '1700000100000');
+  assert.equal((await h.media({ hash: hq })).status, 200, 'el póster del vídeo de serie también');
+  void hp;
 });

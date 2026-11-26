@@ -139,6 +139,8 @@ export function unionByNeighbours(newer = [], older = [], key = x => x?.id) {
   return out.concat(keyless)
 }
 
+/** Hashes of expired photos a workout remembers (api/media-expiry.js GONE_MAX). */
+export const GONE_MAX = 100
 const workoutKey = w => (w?.id != null ? w.id : `${w?.d}|${w?.start}`)
 
 /**
@@ -152,18 +154,29 @@ const workoutKey = w => (w?.id != null ? w.id : `${w?.d}|${w?.start}`)
  * lists it — a resurrected photo is one tap to remove again, a lost one is gone. A removal the
  * other device has already pulled sticks, since neither copy lists it any more. Refs are carried
  * as they are; readers normalise and cap (workoutMediaOf). Mutates and returns `kept`.
+ *
+ * The exception to that limit is a photo the server expired (api/media-expiry.js): the workout
+ * carries its hash in `mediaGone`, and neither copy may list it again.
  */
 export function mergeWorkoutMedia(kept, other) {
   if (!kept || typeof kept !== 'object') return kept
+  const hashOf = m => (m && typeof m === 'object' && typeof m.hash === 'string' ? m.hash : null)
+  // `mediaGone`: the hashes the server took off this workout when they expired (api/media-expiry.js).
+  // Either copy knowing one is enough to keep it off, so a device that still lists it (it was
+  // offline, or edited the workout meanwhile) cannot bring it back and upload the file again.
+  const gone = new Set([...list(kept.mediaGone), ...list(other?.mediaGone)].filter(h => typeof h === 'string'))
+  if (gone.size) {
+    kept.mediaGone = [...gone].slice(-GONE_MAX)
+    if (Array.isArray(kept.media) && kept.media.some(m => gone.has(hashOf(m)))) kept.media = kept.media.filter(m => !gone.has(hashOf(m)))
+  }
   const mine = list(kept.media)
   const theirs = list(other?.media)
   if (!theirs.length) return kept
-  const hashOf = m => (m && typeof m === 'object' && typeof m.hash === 'string' ? m.hash : null)
   const seen = new Set(mine.map(hashOf).filter(Boolean))
   const extra = []
   for (const m of theirs) {
     const h = hashOf(m)
-    if (!h || seen.has(h)) continue
+    if (!h || seen.has(h) || gone.has(h)) continue
     seen.add(h)
     extra.push(clone(m))
   }

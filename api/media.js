@@ -343,23 +343,34 @@ export function referencedHashes(state) {
 
 /**
  * The photos and videos of the logged workouts of a state, by file: Map hash -> { workoutId, d,
- * hash, kind, mime, size, dur, at, poster, isPoster }. Only workouts[].media and each one's poster
- * (the files Aezio's coach may be shown, with the client's consent); not exercises, sets, sounds or
- * the avatar. A poster answers with its parent's `at` and `kind`. `at` is 0 when the ref has none.
+ * hash, kind, mime, size, dur, at, poster, isPoster, source, exId }. workouts[].media (`source:
+ * 'workout'`) and each set's form video, workouts[].entries[].sets[].media (`source: 'set'`, with
+ * `exId` of the entry); and each one's poster (the files Aezio's coach may be shown, with the
+ * client's consent); not custom exercises, sounds or the avatar. A poster answers with its
+ * parent's `at`, `kind` and `source`. `at` is 0 when the ref has none. A hash listed twice keeps
+ * the first appearance (the workout's own list before the sets').
  */
 export function workoutMediaIndex(state) {
   const out = new Map();
   if (!state || typeof state !== 'object' || !Array.isArray(state.workouts)) return out;
   const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
   const num = v => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+  const add = (w, m, source, exId) => {
+    if (!isObj(m) || typeof m.hash !== 'string' || !HASH_RE.test(m.hash)) return;
+    const base = { workoutId: w.id ?? null, d: typeof w.d === 'string' ? w.d : null, kind: typeof m.kind === 'string' ? m.kind : null, at: num(m.at) > 0 ? Math.round(m.at) : 0, source, exId };
+    const post = isObj(m.poster) && typeof m.poster.hash === 'string' && HASH_RE.test(m.poster.hash) ? m.poster : null;
+    if (!out.has(m.hash)) out.set(m.hash, { ...base, hash: m.hash, mime: typeof m.mime === 'string' ? m.mime : null, size: num(m.size), dur: num(m.dur), poster: post ? post.hash : null, isPoster: false });
+    if (post && !out.has(post.hash)) out.set(post.hash, { ...base, hash: post.hash, mime: typeof post.mime === 'string' ? post.mime : null, size: num(post.size), dur: null, poster: null, isPoster: true });
+  };
   for (const w of state.workouts) {
-    if (!isObj(w) || !Array.isArray(w.media)) continue;
-    for (const m of w.media) {
-      if (!isObj(m) || typeof m.hash !== 'string' || !HASH_RE.test(m.hash)) continue;
-      const base = { workoutId: w.id ?? null, d: typeof w.d === 'string' ? w.d : null, kind: typeof m.kind === 'string' ? m.kind : null, at: num(m.at) > 0 ? Math.round(m.at) : 0 };
-      const post = isObj(m.poster) && typeof m.poster.hash === 'string' && HASH_RE.test(m.poster.hash) ? m.poster : null;
-      if (!out.has(m.hash)) out.set(m.hash, { ...base, hash: m.hash, mime: typeof m.mime === 'string' ? m.mime : null, size: num(m.size), dur: num(m.dur), poster: post ? post.hash : null, isPoster: false });
-      if (post && !out.has(post.hash)) out.set(post.hash, { ...base, hash: post.hash, mime: typeof post.mime === 'string' ? post.mime : null, size: num(post.size), dur: null, poster: null, isPoster: true });
+    if (isObj(w) && Array.isArray(w.media)) for (const m of w.media) add(w, m, 'workout', null);
+  }
+  for (const w of state.workouts) {
+    if (!isObj(w) || !Array.isArray(w.entries)) continue;
+    for (const e of w.entries) {
+      if (!isObj(e) || !Array.isArray(e.sets)) continue;
+      const exId = e.id != null ? String(e.id) : null;
+      for (const st of e.sets) if (isObj(st) && Array.isArray(st.media)) for (const m of st.media) add(w, m, 'set', exId);
     }
   }
   return out;

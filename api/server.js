@@ -36,6 +36,7 @@ import {
 } from './watch-relay.js';
 import { startAdminSocket } from './admin-socket.js';
 import { createMediaStore, mediaLimits, mediaConfig, MediaError, HASH_RE, workoutMediaIndex } from './media.js';
+import { retentionDays, expiresAt, hasExpired, expireMedia } from './media-expiry.js';
 import { effectiveRoutineId } from './queue.js';
 import { stampPut, highestStamp } from './sync-stamps.js';
 import { atomicWrite as durableWrite } from './durable.js';
@@ -2278,7 +2279,25 @@ function mediaThrottle(req, user, win) {
 // profiles in db.json are swept, and only when their state parses (see media.js for why a
 // missing anything never means "delete"). First pass a few minutes after boot, so an instance
 // that is redeployed more often than hourly still gets one.
+// Caducidad (media-expiry.js): antes del sweep, quita de cada perfil las referencias de entrenos
+// más viejas que MEDIA_RETENTION_DAYS (0 = apagada), por el camino sellado de writeStateAs. Sin
+// nada caducado no se escribe (no se toca _rev). Un perfil que falla no frena a los demás.
+const MEDIA_RETENTION_DAYS = retentionDays(process.env);
+function mediaExpireAll() {
+  if (!(MEDIA_RETENTION_DAYS > 0)) return;
+  let refs = 0, profiles = 0;
+  for (const u of db.users) {
+    try {
+      const now = Date.now();
+      if (!hasExpired(readStateCached(u.id), { now, days: MEDIA_RETENTION_DAYS })) continue;
+      const r = writeStateAs(u.id, (S, t) => expireMedia(S, { now, days: MEDIA_RETENTION_DAYS, t }), { skipIf: x => !x.removed });
+      if (r.removed) { refs += r.removed; profiles++; }
+    } catch (e) { console.error('media: expiry failed for', u.id, e.message); }
+  }
+  if (refs) console.log(`media: ${refs} expired reference(s) removed from ${profiles} profile(s)`);
+}
 function mediaSweepAll() {
+  mediaExpireAll();
   try {
     const r = MEDIA.sweepAll({ uids: db.users.map(u => u.id) });
     if (r.removed || r.tmp) console.log(`media: swept ${r.removed} unreferenced file(s), ${(r.freedBytes / 1048576).toFixed(1)} MB, ${r.tmp} stale upload(s)`);
@@ -2286,7 +2305,7 @@ function mediaSweepAll() {
 }
 if (MEDIA_ON) {
   setInterval(mediaSweepAll, 3600000).unref();
-  setTimeout(mediaSweepAll, 5 * 60000).unref();
+  setTimeout(mediaSweepAll, Math.max(100, +(process.env.MEDIA_SWEEP_FIRST_MS || 5 * 60000) || 5 * 60000)).unref();   // la variable es solo para las pruebas
 }
 
 // A stored file, streamed. The headers are the point: the bytes were chosen by a user, so the
@@ -3019,9 +3038,12 @@ const routes = {
     if (!validInternalSignature('workout-media-list', body.id, body.ts, body.sig)) return json(res, 403, { error: 'forbidden' });
     if (!db.users.some(u => u.id === body.id)) return json(res, 404, { error: 'no such profile' });
     const items = [...workoutMediaIndex(readState(body.id)).values()].filter(m => !m.isPoster)
-      .map(({ workoutId, d, hash, kind, mime, size, dur, at, poster }) => ({ workoutId, d, hash, kind, mime, size, dur, at, poster }));
+      .map(({ workoutId, d, hash, kind, mime, size, dur, at, poster, source, exId }) => ({
+        workoutId, d, hash, kind, mime, size, dur, at, poster, source, ...(source === 'set' ? { exId } : {}),
+        expiresAt: at > 0 ? expiresAt(at, MEDIA_RETENTION_DAYS) : null
+      }));
     const u = MEDIA.usage(body.id);
-    json(res, 200, { ok: true, items, usedBytes: u.bytes, quotaBytes: u.quotaBytes });
+    json(res, 200, { ok: true, items, usedBytes: u.bytes, quotaBytes: u.quotaBytes, retentionDays: MEDIA_RETENTION_DAYS });
   },
 
   // What the signed-in app has waiting, and its acknowledgement once it applied and saved it.
