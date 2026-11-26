@@ -104,6 +104,22 @@ La web lee estos archivos sin pasar por la app, así que su nombre y formato tam
 - El borrado de cuenta del cliente usa `POST /api/account/delete` de la 1.4.5 (pide escribir el nombre y
   una prueba de propiedad). `POST /api/me/delete` de la 1.2.4 no se porta: la web no la usa.
 
+### Qué hace la app con lo que llega de Aezio
+
+- **Cola del entrenador** (`store/useStore.js`, `pullCoachPending`): al abrir y con cada comprobación de
+  sincronización (cada 30 s con la app abierta) lee `GET /api/coach-pending`, lo aplica como un cambio
+  normal (`lib/coach-import.js`; las rutinas `aezio-<plan>-<día>` sincronizan entre dispositivos como
+  cualquier otra, con `src` para saber de qué plan vienen), lo sube al servidor y solo entonces hace
+  `POST /api/coach-pending/ack`. Si no pudo subirlo, no hay ack y se reintenta sin volver a aplicar el
+  plan sobre lo que el cliente haya editado (`gym_coach_applied`).
+- **«Añadir a mi app»** (`views/CoachImport.jsx`, ruta `/#/import/:token`): vista previa y confirmación.
+- **Entreno anotado después** (la función «Registrar este entreno» de la 1.4.5): con rutinas de Aezio
+  no cuenta hasta que el entrenador lo confirma; espera en `pendingWorkouts` (que la web lee) y la
+  decisión llega por la cola (`kind: confirm`).
+- **Entreno sin terminar**: lo cubre la función propia de la 1.4.5 («entrenos olvidados»: pregunta, lo
+  termina solo y se puede reabrir 24 h). No se porta `checkUnfinishedWorkout` de la 1.2.4.
+- **Notificaciones push**: `syncPushSubscription` de la 1.4.5 hace lo que hacía `refreshPush`.
+
 ### Seguridad del acceso interno
 
 La web llama por el nombre de contenedor `opengym-web`, así que `/api/internal/` solo se ofrece cuando

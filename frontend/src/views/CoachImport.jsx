@@ -6,6 +6,7 @@ import { exOr } from '../lib/exercises.js'
 import { exLine } from '../lib/history.js'
 import { exCount } from '../lib/format.js'
 import { t } from '../lib/i18n.js'
+import { exerciseNameFor, exerciseNameClass } from '../lib/i18n-core.js'
 import { parseCoachPlan, coachPlanChanges, applyCoachPlan } from '../lib/coach-import.js'
 import { Thumb } from '../components/Media.jsx'
 import { Button } from '../components/ui.jsx'
@@ -83,7 +84,7 @@ export default function CoachImport() {
           return <div className="item" key={i}>
             <Thumb ex={ex} />
             <div className="grow">
-              <div className="tt capitalize">{ex.n}</div>
+              <div className={'tt ' + exerciseNameClass(ex)}>{exerciseNameFor(ex)}</div>
               <div className="ss">{exLine(e, S.unit)}{range ? ' · ' + t('plan: {0}', range) : ''}</div>
             </div>
           </div>
