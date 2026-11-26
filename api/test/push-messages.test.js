@@ -9,7 +9,7 @@ test('localizes every server-generated notification in pt-BR', () => {
     tag: 'rest-timer',
   });
   assert.deepEqual(testPush('pt-BR'), {
-    title: 'openGym',
+    title: 'AezioGym',
     body: 'Notificação de teste ✅ É assim que os alertas aparecem.',
     tag: 'test',
   });
@@ -27,7 +27,7 @@ test('localizes every server-generated notification in id', () => {
     tag: 'rest-timer',
   });
   assert.deepEqual(testPush('id'), {
-    title: 'openGym',
+    title: 'AezioGym',
     body: 'Notifikasi uji coba ✅ Begini tampilan notifikasinya.',
     tag: 'test',
   });
@@ -78,4 +78,14 @@ test('the rest push names the next set when the app sent one, as one clean line'
   assert.equal(restTimerPush('en', { evil: true }).body, restTimerPush('en').body);
   assert.equal(cleanNext('Plank,\n45 s\u202e'), 'Plank, 45 s');
   assert.equal(cleanNext('x'.repeat(300)).length, 120);
+});
+
+test('los avisos en castellano coinciden con los de AezioGym en producción', () => {
+  assert.deepEqual(restTimerPush('es'), { title: 'Se acabó el descanso 💪', body: 'Es hora de tu siguiente serie', tag: 'rest-timer' });
+  assert.equal(testPush('es').title, 'AezioGym');
+  assert.match(testPush('es').body, /prueba/);
+  assert.equal(dayReminderPush('es', { name: 'Pierna', emoji: 'legs' }).title, '🦵 Pierna hoy');
+  assert.equal(dayReminderPush('es', null).title, 'Hoy tienes entreno');
+  // sin idioma conocido sigue cayendo al inglés
+  assert.equal(restTimerPush('xx').title, 'Rest over 💪');
 });

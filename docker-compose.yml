@@ -32,6 +32,7 @@ services:
       - INTEGRATIONS=${INTEGRATIONS:-}        # sin webhooks ni Strava
       - API_TOKENS=${API_TOKENS:-off}         # sin tokens de API (ni MCP ni calendario)
       - OIDC_ISSUER=${OIDC_ISSUER:-}          # sin inicio de sesión OIDC
+      - DEFAULT_LANG=${DEFAULT_LANG:-es}      # idioma de quien aún no ha elegido uno
     volumes:
       - ./data:/data        # users, passkeys, per-user state, session secret — BACK THIS UP
                              # (and uploads/: the photos and videos of custom exercises)

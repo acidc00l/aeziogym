@@ -10,6 +10,15 @@ const COPY = {
     dayRoutineSuffix: 'today',
     dayBody: "It's on your plan. Let's go 💪",
   },
+  // AezioGym: los mismos textos que la versión anterior en producción.
+  es: {
+    restTitle: 'Se acabó el descanso 💪',
+    restBody: 'Es hora de tu siguiente serie',
+    testBody: 'Notificación de prueba ✅ Así se ven los avisos.',
+    dayFallbackTitle: 'Hoy tienes entreno',
+    dayRoutineSuffix: 'hoy',
+    dayBody: 'Está en tu plan. Vamos 💪',
+  },
   'pt-BR': {
     restTitle: 'Descanso terminado 💪',
     restBody: 'Hora da próxima série.',
@@ -69,7 +78,7 @@ export function restTimerPush(lang, next = null) {
 export const cleanNext = v => (typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120) : '');
 
 export function testPush(lang) {
-  return { title: 'openGym', body: copyFor(lang).testBody, tag: 'test' };
+  return { title: 'AezioGym', body: copyFor(lang).testBody, tag: 'test' };
 }
 
 export function dayReminderPush(lang, routine) {
