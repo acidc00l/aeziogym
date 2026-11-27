@@ -1,4 +1,5 @@
 import TrainerNotice from '../components/TrainerNotice.jsx'
+import WellnessCard from '../components/WellnessCard.jsx'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
@@ -142,6 +143,8 @@ export default function Home() {
       <div><h1>{user ? t('Hi {0}', user.name) : 'AezioGym'}</h1><div className="sub">{today.toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' })}</div></div>
       <button className="iconbtn" data-tour="settings-gear" onClick={() => nav('/settings')} aria-label={trouble ? t('Settings') + ', ' + t('Connection problem') : t('Settings')}><Icon name="gear" />{trouble && <span className="tab-dot" aria-hidden="true" />}</button>
     </div>
+    {/* «¿Cómo estás hoy?» de Aezio: solo con plan de Aezio y respuesta de la web (components/WellnessCard.jsx). */}
+    <WellnessCard />
     <TrainerNotice />
 
     <div className="card">
