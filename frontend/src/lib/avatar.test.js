@@ -1,13 +1,14 @@
 import { describe, it, expect } from 'vitest'
 import {
   avatarOf, initialOf, setAvatarPhoto, setAvatarPreset, clearAvatar, sanitizeAvatar, AVATAR_PRESETS,
-  clampCrop, sourceRect, zoomAround, coverScale, hasImageMetadata, openAvatarImage, renderAvatar,
+  clampCrop, sourceRect, stripJpegMetadata, failedStep, zoomAround, coverScale, hasImageMetadata, openAvatarImage, renderAvatar,
   AVATAR_EDGE, AVATAR_MAX_BYTES, ZOOM_MAX
 } from './avatar.js'
 import { referencedHashes, uploadableFiles, keptHashes } from './media-refs.js'
 import { stampEdits, mergeStates } from './sync-merge.js'
 import { exportBackupZip, readBackupFile, storeBackupMedia } from './backup-media.js'
 import { createMediaStore, memoryBackend } from './media-store.js'
+import { MediaError } from './media-ingest.js'
 import { sha256Hex } from './sha256.js'
 import { bytes, latin1, jpeg, webpVp8 } from './media-samples.test-util.js'
 
@@ -216,5 +217,82 @@ describe('the avatar in a backup', () => {
     const to = createMediaStore(memoryBackend())
     expect(await storeBackupMedia(read.files, { media: to })).toEqual({ stored: 1, skipped: 0 })
     expect(await to.has(m.hash)).toBe(true)
+  })
+})
+
+describe('a JPEG from Safari: its Exif is cut out instead of refusing the photo', () => {
+  const frame = () => bytes([0xff, 0xc0], u16be(17), [8, 1, 0, 1, 0, 3], new Uint8Array(9), [0xff, 0xda, 0, 2], [1, 2, 3, 0xff, 0xd9])
+  const seg = (mk, ...body) => { const b = bytes(...body); return bytes([0xff, mk], u16be(b.length + 2), b) }
+  const jfif = () => seg(0xe0, 'JFIF', [0, 1, 1, 0, 0, 1, 0, 1, 0, 0])
+  const exif = () => seg(0xe1, 'Exif', [0, 0], 'GPSLatitude 47.3769 N')
+  const icc = () => seg(0xe2, 'ICC_PROFILE', [0, 1, 1], 'sRGB')
+  const com = () => seg(0xfe, 'hey')
+  const full = () => bytes([0xff, 0xd8], jfif(), exif(), icc(), com(), frame())
+  const withSafari = (extra = {}) => {
+    const d = fakeDeps()
+    d.encodeImage = async (pic, edge, q) => ({ blob: new Blob([extra.out || full()], { type: extra.mime || 'image/jpeg' }), mime: extra.mime || 'image/jpeg', width: edge, height: edge, q })
+    return d
+  }
+
+  it('stripJpegMetadata drops APP1, APP13, COM and a foreign APP2, and keeps JFIF, ICC and the rest', () => {
+    const out = stripJpegMetadata(full())
+    expect(out).toBeInstanceOf(Uint8Array)
+    expect(out).toEqual(bytes([0xff, 0xd8], jfif(), icc(), frame()))
+    expect(hasImageMetadata(full())).toBe(true)
+    expect(hasImageMetadata(out)).toBe(false)
+    const more = bytes([0xff, 0xd8], jfif(), seg(0xed, 'Photoshop 3.0'), seg(0xe2, 'MPF', [0, 0]), frame())
+    expect(stripJpegMetadata(more)).toEqual(bytes([0xff, 0xd8], jfif(), frame()))
+    const clean = bytes([0xff, 0xd8], jfif(), icc(), frame())
+    expect(stripJpegMetadata(clean)).toEqual(clean)
+  })
+  it('stripJpegMetadata gives null for a malformed JPEG', () => {
+    expect(stripJpegMetadata(bytes('not a jpeg'))).toBe(null)
+    expect(stripJpegMetadata(bytes([0xff, 0xd8, 0xff, 0xe1, 0x10, 0x00], 'Exif'))).toBe(null)   // runs past the end
+    expect(stripJpegMetadata(bytes([0xff, 0xd8], jfif()))).toBe(null)                            // no SOS
+    expect(stripJpegMetadata(bytes([0xff, 0xd8, 0x00, 0x01, 0x02, 0x03]))).toBe(null)
+  })
+  it('renderAvatar saves the cleaned JPEG, with its size and hash worked out on the clean bytes', async () => {
+    const d = withSafari()
+    const pic = await openAvatarImage(new Blob([jpeg()]), d)
+    const out = await renderAvatar(pic, 264, { zoom: 1 }, d)
+    const stored = new Uint8Array(await out.blob.arrayBuffer())
+    expect(stored).toEqual(bytes([0xff, 0xd8], jfif(), icc(), frame()))
+    expect(hasImageMetadata(stored)).toBe(false)
+    expect(out.media).toMatchObject({ mime: 'image/jpeg', size: stored.length })
+    expect(out.media.size).toBeLessThan(full().length)
+    expect(out.media.hash).toBe(await sha256Hex(stored))
+  })
+  it('still refuses a PNG with text, a WebP with Exif and a JPEG that cannot be cleaned, saying which check failed', async () => {
+    const pngText = bytes([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], [0, 0, 0, 13], 'IHDR', new Uint8Array(13), [0, 0, 0, 0], [0, 0, 0, 5], 'tEXt', 'Title', [0, 0, 0, 0], [0, 0, 0, 0], 'IEND', [0, 0, 0, 0])
+    const bad = bytes([0xff, 0xd8], exif(), [0xff, 0xe1, 0xff])   // an APP1 and then a cut-off segment, no SOS
+    for (const [out, mime] of [[pngText, 'image/png'], [webpWithExif(), 'image/webp'], [bad, 'image/jpeg']]) {
+      const d = withSafari({ out, mime })
+      const pic = await openAvatarImage(new Blob([jpeg()]), d)
+      await expect(renderAvatar(pic, 264, { zoom: 1 }, d)).rejects.toMatchObject({ code: 'unreadable', step: 'save', check: 'metadata' })
+    }
+  })
+  it('names the failing step: encode, ref and open', async () => {
+    const enc = fakeDeps()
+    enc.encodeImage = async () => { throw new MediaError('unreadable') }
+    const pic = await openAvatarImage(new Blob([jpeg()]), enc)
+    await expect(renderAvatar(pic, 264, { zoom: 1 }, enc)).rejects.toMatchObject({ code: 'unreadable', step: 'save', check: 'encode' })
+    const boom = fakeDeps()
+    boom.encodeImage = async () => { throw new Error('toBlob failed') }
+    await expect(renderAvatar(pic, 264, { zoom: 1 }, boom)).rejects.toMatchObject({ code: 'unreadable', step: 'save', check: 'encode', detail: 'toBlob failed' })
+    const ref = fakeDeps({ out: bytes(webpVp8(256, 256)) })
+    const odd = async (p, edge, q) => ({ blob: new Blob([webpVp8(256, 256)], { type: 'image/webp' }), mime: 'image/avif', width: edge, height: edge, q })
+    ref.encodeImage = odd
+    await expect(renderAvatar(pic, 264, { zoom: 1 }, ref)).rejects.toMatchObject({ code: 'unreadable', step: 'save', check: 'ref' })
+    const dec = fakeDeps()
+    dec.decodeImage = async () => { throw new MediaError('unreadable') }
+    await expect(openAvatarImage(new Blob([jpeg()]), dec)).rejects.toMatchObject({ code: 'unreadable', step: 'open' })
+  })
+  it('tells opening from saving, and which check, for the sentence', () => {
+    expect(failedStep(new MediaError('unreadable', { step: 'open' }))).toBe('open')
+    expect(failedStep(new MediaError('unreadable', { step: 'save', check: 'encode' }))).toBe('encode')
+    expect(failedStep(new MediaError('unreadable', { step: 'save', check: 'metadata' }))).toBe('metadata')
+    expect(failedStep(new MediaError('unreadable', { step: 'save', check: 'ref' }))).toBe('ref')
+    expect(failedStep(new MediaError('unreadable'))).toBe(null)
+    expect(failedStep(new MediaError('too-large', { step: 'save' }))).toBe(null)
   })
 })

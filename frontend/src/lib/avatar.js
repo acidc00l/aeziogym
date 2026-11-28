@@ -164,7 +164,54 @@ export function hasImageMetadata (bytes) {
   return false
 }
 
+/**
+ * A copy of a JPEG without the segments that carry metadata: APP1 (EXIF or XMP), APP13 (IPTC), COM
+ * and an APP2 that is not the colour profile. Everything else stays byte for byte (JFIF, the ICC
+ * profile, tables, frame, image data). Walks the headers up to SOS and copies the rest as it is.
+ * Returns a new Uint8Array, or null if the JPEG is malformed (no SOI, a segment that runs past the
+ * end, no SOS). Safari's canvas encoder (ImageIO) writes an APP1 Exif into the JPEG it makes.
+ */
+export function stripJpegMetadata (bytes) {
+  const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
+  if (b.length < 4 || b[0] !== 0xff || b[1] !== 0xd8) return null
+  const parts = [b.subarray(0, 2)]
+  let i = 2
+  while (i + 4 <= b.length) {
+    if (b[i] !== 0xff) return null
+    const mk = b[i + 1]
+    if (mk === 0xff) { i++; continue }                       // fill byte before a marker
+    if (mk === 0xd9) return null                             // the end with no image data
+    if (mk === 0xda) {                                       // the image data starts: copy it all
+      parts.push(b.subarray(i))
+      const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0))
+      let o = 0
+      for (const p of parts) { out.set(p, o); o += p.length }
+      return out
+    }
+    const len = (b[i + 2] << 8) | b[i + 3]
+    if (len < 2 || i + 2 + len > b.length) return null
+    const drop = mk === 0xe1 || mk === 0xed || mk === 0xfe || (mk === 0xe2 && ascii(b, i + 4, 11) !== 'ICC_PROFILE')
+    if (!drop) parts.push(b.subarray(i, i + 2 + len))
+    i += 2 + len
+  }
+  return null
+}
+
 /* ---------------------------------------------------------------- picking and encoding */
+
+/** The refusal while saving, with which check failed: 'metadata', 'encode' or 'ref'. */
+function saveError (e, check) {
+  if (e instanceof MediaError && e.code !== 'unreadable') return Object.assign(e, { step: 'save' })
+  return new MediaError('unreadable', { step: 'save', check, detail: e ? String(e.message || e).slice(0, 120) : undefined })
+}
+
+/** Where a refusal came from, for the sentence: 'open', or 'encode' | 'metadata' | 'ref' while saving; null if not one of ours. */
+export function failedStep (e) {
+  if (e?.code !== 'unreadable') return null
+  if (e.step === 'open') return 'open'
+  if (e.step === 'save') return e.check === 'metadata' || e.check === 'ref' ? e.check : 'encode'
+  return null
+}
 
 const defaultDeps = { decodeImage, encodeImage, doc: globalThis.document }
 
@@ -183,7 +230,12 @@ export async function openAvatarImage (file, deps = {}) {
     const dims = imageDims(new Uint8Array(await file.slice(0, 256 * 1024).arrayBuffer()))
     if (dims && dims.width * dims.height > MAX_PHOTO_MP * 1e6) throw new MediaError('photo-too-big')
   }
-  const pic = await d.decodeImage(file, sniffed.mime, d)
+  let pic
+  try {
+    pic = await d.decodeImage(file, sniffed.mime, d)
+  } catch (e) {
+    throw e instanceof MediaError ? Object.assign(e, { step: e.step || 'open' }) : new MediaError('unreadable', { step: 'open' })
+  }
   try {
     if (pic.width * pic.height > MAX_PHOTO_MP * 1e6) throw new MediaError('photo-too-big')
     const scale = Math.min(1, WORK_EDGE / Math.max(pic.width, pic.height))
@@ -196,13 +248,16 @@ export async function openAvatarImage (file, deps = {}) {
     ctx.imageSmoothingQuality = 'high'
     ctx.drawImage(pic.source, 0, 0, w, h)
     return { source: canvas, width: w, height: h, close: () => { canvas.width = 0; canvas.height = 0 } }
+  } catch (e) {
+    throw e instanceof MediaError ? Object.assign(e, { step: e.step || 'open' }) : new MediaError('unreadable', { step: 'open', detail: String(e?.message || e).slice(0, 120) })
   } finally { pic.close() }
 }
 
 /**
  * The crop drawn into the AVATAR_EDGE square and encoded under AVATAR_MAX_BYTES:
  * { blob, media } with media a MediaRef ready for setAvatarPhoto. Quality steps down, then the
- * edge, before it gives up ('too-large'). Refuses bytes that carry metadata ('unreadable').
+ * edge, before it gives up ('too-large'). A JPEG's metadata is cut out; any other bytes that carry metadata are refused
+ * ('unreadable', step 'save', check 'metadata'; 'encode' and 'ref' for the other two failures).
  */
 export async function renderAvatar (pic, view, crop, deps = {}) {
   const d = { ...defaultDeps, ...deps }
@@ -216,13 +271,21 @@ export async function renderAvatar (pic, view, crop, deps = {}) {
     ctx.drawImage(pic.source, r.sx, r.sy, r.side, r.side, 0, 0, AVATAR_EDGE, AVATAR_EDGE)
     const square = { source: canvas, width: AVATAR_EDGE, height: AVATAR_EDGE }
     for (const [edge, q] of [[256, 0.82], [256, 0.7], [256, 0.55], [192, 0.6], [192, 0.45]]) {
-      const out = await d.encodeImage(square, edge, q, d)
+      let out
+      try {
+        out = await d.encodeImage(square, edge, q, d)
+      } catch (e) {
+        throw saveError(e, 'encode')
+      }
       if (out.blob.size > AVATAR_MAX_BYTES) continue
-      const bytes = new Uint8Array(await out.blob.arrayBuffer())
-      if (hasImageMetadata(bytes)) throw new MediaError('unreadable')
+      let bytes = new Uint8Array(await out.blob.arrayBuffer())
+      // Safari's JPEG carries an APP1 Exif: it is cut out here instead of refusing the photo. A PNG
+      // or a WebP with metadata is still refused, and so is a JPEG that cannot be cleaned.
+      if (out.mime === 'image/jpeg' && hasImageMetadata(bytes)) bytes = stripJpegMetadata(bytes) || bytes
+      if (hasImageMetadata(bytes)) throw saveError(null, 'metadata')
       const hash = await sha256Hex(bytes)
       const media = normalizeMediaRef({ kind: 'image', hash, mime: out.mime, size: bytes.length, width: out.width, height: out.height, at: Date.now() })
-      if (!media) throw new MediaError('unreadable')
+      if (!media) throw saveError(null, 'ref')
       return { blob: new Blob([bytes], { type: out.mime }), media }
     }
     throw new MediaError('too-large', { mb: Math.round(AVATAR_MAX_BYTES / 1024) / 1024 })

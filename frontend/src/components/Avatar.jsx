@@ -9,7 +9,7 @@ import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
 import { t } from '../lib/i18n.js'
 import { mediaStore } from '../lib/media-store.js'
-import { avatarOf, initialOf, setAvatarPhoto, setAvatarPreset, clearAvatar, AVATAR_PRESETS, clampCrop, coverScale, zoomAround, ZOOM_MAX, openAvatarImage, renderAvatar } from '../lib/avatar.js'
+import { avatarOf, initialOf, setAvatarPhoto, setAvatarPreset, clearAvatar, AVATAR_PRESETS, clampCrop, coverScale, zoomAround, ZOOM_MAX, openAvatarImage, renderAvatar, failedStep } from '../lib/avatar.js'
 import { useMediaUrl } from './CustomMedia.jsx'
 import { mediaErrorText } from './CustomMediaField.jsx'
 import Glyph from './Glyph.jsx'
@@ -25,6 +25,12 @@ import { streakInfo } from '../lib/streak.js'
 import { isOn } from '../lib/modules.js'
 
 export function avatarErrorText(e) {
+  const step = failedStep(e)
+  if (step === 'open') return t('Could not open the photo. Try another one or let us know.')
+  if (step) {
+    const what = step === 'metadata' ? t('metadata check') : step === 'ref' ? t('photo record') : t('photo encoding')
+    return t('Could not save the photo ({0}). Try another one or let us know.', what)
+  }
   if (e?.code === 'type') return t('That isn’t a photo. Try a JPEG, PNG, WebP or HEIC.')
   return mediaErrorText(e)
 }
@@ -136,6 +142,7 @@ function AvatarCropSheet({ file, close }) {
       } catch (e) {
         if (!alive) return
         close()
+        console.warn('[avatar] could not open the photo', e?.code, e?.step, e?.detail || e?.message)
         toast(avatarErrorText(e))
       }
     })()
@@ -216,6 +223,7 @@ function AvatarCropSheet({ file, close }) {
       close()
       toast(t('Picture set. Looking sharp.'))
     } catch (e) {
+      console.warn('[avatar] could not save the photo', e?.code, e?.step, e?.check, e?.detail || e?.message)
       toast(avatarErrorText(e))
       setBusy(false)
     }
